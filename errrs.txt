@@ -1,17 +1,26 @@
 (env) ➜  ~ python aws-priceing/openstack_aws_pricing_tool.py --cloud dc1-cdl-osp4 --project osp-c1npgt04-Infr-Arch --aws-csv aws-priceing/AmazonEC2-pricing-20250505.csv
-VMs: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 417/417 [00:02<00:00, 152.34vm/s]
-|    | project                          | server                           | vcpus   | ram_GiB   | disk_GB   | aws_type   |   od$/hr |   ri3yr$/hr |   od$/mo |    od$/yr |   ri3yr$/mo |   ri3yr$/yr |
-|----|----------------------------------|----------------------------------|---------|-----------|-----------|------------|----------|-------------|----------|-----------|-------------|-------------|
-|  0 | ae0c4b74bf2e495690dea21b2c7de16a | linuxtest                        | 2       | 2         | 50        | t4g.small  |   0.0223 |      0.0128 |  16.2640 |  195.1680 |      9.3290 |    111.9480 |
-|  1 | ae0c4b74bf2e495690dea21b2c7de16a | CDLDTIACVDM0006                  | 8       | 16        | 365       | i2.2xlarge |   0.0900 |      0.8030 |  65.7000 |  788.4000 |    586.1900 |   7034.2800 |
-|  2 | ae0c4b74bf2e495690dea21b2c7de16a | CDLDTIACVDM0007                  | 8       | 16        | 271       | i2.2xlarge |   0.0797 |      0.7927 |  58.1800 |  698.1600 |    578.6700 |   6944.0400 |
-|  3 | ae0c4b74bf2e495690dea21b2c7de16a | DC1CDL4-operatiosn-t_cloud_agent | 2       | 4         | 50        | c3.xlarge  |   0.0255 |      0.1365 |  18.6000 |  223.2000 |     99.6300 |   1195.5600 |
-|  4 | ae0c4b74bf2e495690dea21b2c7de16a | CDLDTXASVPF0004                  | 4       | 8         | 205       | i2.xlarge  |   0.0425 |      0.4045 |  31.0000 |  372.0000 |    295.2600 |   3543.1200 |
-|  5 | ae0c4b74bf2e495690dea21b2c7de16a | DC1CDL-infra-arch-AZ_cloud_agent | 2       | 4         | 50        | c3.xlarge  |   0.0255 |      0.1365 |  18.6000 |  223.2000 |     99.6300 |   1195.5600 |
-|  6 | ae0c4b74bf2e495690dea21b2c7de16a | CDLVDIVRO1514                    | 4       | 8         | 250       | i2.xlarge  |   0.0474 |      0.4094 |  34.6000 |  415.2000 |    298.8600 |   3586.3200 |
-|  7 | ae0c4b74bf2e495690dea21b2c7de16a | kishan-windows                   | 4       | 16        | 500       | i2.xlarge  |   0.0748 |      0.4368 |  54.6000 |  655.2000 |    318.8600 |   3826.3200 |
-|  8 | ae0c4b74bf2e495690dea21b2c7de16a | CDLVDIVROWA0359                  | 4       | 8         | 250       | i2.xlarge  |   0.0474 |      0.4094 |  34.6000 |  415.2000 |    298.8600 |   3586.3200 |
-|  9 | ae0c4b74bf2e495690dea21b2c7de16a | infra-dc1cdl4-AZ2_cloud_agent    | 2       | 4         | 50        | c3.xlarge  |   0.0255 |      0.1365 |  18.6000 |  223.2000 |     99.6300 |   1195.5600 |
-| 10 | ae0c4b74bf2e495690dea21b2c7de16a | CDLVDIVROWA0665                  | 8       | 16        | 350       | i2.2xlarge |   0.0884 |      0.8014 |  64.5000 |  774.0000 |    584.9900 |   7019.8800 |
-| 11 | ae0c4b74bf2e495690dea21b2c7de16a | infra-dc1cdl4_cloud_agent        | 2       | 4         | 50        | c3.xlarge  |   0.0255 |      0.1365 |  18.6000 |  223.2000 |     99.6300 |   1195.5600 |
-| 12 |                                  | TOTAL                            |         |           |           |            |   0.5943 |      4.6158 | 433.8440 | 5206.1280 |   3369.5390 |  40434.4680 |
+Traceback (most recent call last):
+  File "/home/srini/env/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 3802, in get_loc
+    return self._engine.get_loc(casted_key)
+  File "pandas/_libs/index.pyx", line 138, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/index.pyx", line 165, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/hashtable_class_helper.pxi", line 5745, in pandas._libs.hashtable.PyObjectHashTable.get_item
+  File "pandas/_libs/hashtable_class_helper.pxi", line 5753, in pandas._libs.hashtable.PyObjectHashTable.get_item
+KeyError: 'Price Description'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "aws-priceing/openstack_aws_pricing_tool.py", line 134, in <module>
+    try:main()
+  File "aws-priceing/openstack_aws_pricing_tool.py", line 127, in main
+    df=build(conn,pid,a.aws_csv)
+  File "aws-priceing/openstack_aws_pricing_tool.py", line 90, in build
+    od,ri,spec,gp3=_pricing(_load_csv(csv))
+  File "aws-priceing/openstack_aws_pricing_tool.py", line 63, in _pricing
+    (inst['Price Description'].str.contains('per On Demand', case=False, na=False))]
+  File "/home/srini/env/lib/python3.8/site-packages/pandas/core/frame.py", line 3807, in __getitem__
+    indexer = self.columns.get_loc(key)
+  File "/home/srini/env/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 3804, in get_loc
+    raise KeyError(key) from err
+KeyError: 'Price Description'

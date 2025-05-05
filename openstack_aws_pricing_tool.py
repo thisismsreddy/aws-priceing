@@ -36,28 +36,47 @@ from tabulate import tabulate
 def _load_aws_prices(csv_path: Path):
     """Return two dicts keyed by instance type → hourly price.
 
-    * on_demand[type]  ➜ float
-    * ri_3yr_no_upfront[type] ➜ float
+    The official EC2 price list CSV starts with ~5 metadata lines that *do not*
+    have the same column count as the real table, which confuses the default
+    Pandas parser.  We scan until we hit the header row beginning with "SKU"
+    and tell `read_csv` to skip everything before that.
     """
-    df = pd.read_csv(csv_path)
+    # Detect header line number (first field == "SKU")
+    with csv_path.open("r", newline="") as f:
+        for lineno, line in enumerate(f):
+            if line.startswith("\"SKU\"") or line.startswith("SKU"):
+                header_row = lineno
+                break
+        else:
+            raise ValueError("Could not locate CSV header (line starting with 'SKU') in price file")
 
+    df = pd.read_csv(
+        csv_path,
+        skiprows=header_row,           # skip metadata lines
+        quotechar='"',
+        dtype=str                     # keep everything as str first, lighter mem
+    )
+
+    # Pandas treats the *next* line after skiprows as header by default.
     # Normalise column names (strip leading/trailing spaces)
     df.columns = df.columns.str.strip()
+
+    # Quick numeric cleanup for price column
+    df["PricePerUnit"] = pd.to_numeric(df["PricePerUnit"], errors="coerce")
 
     # Pre‑filter by region, unit and currency once for speed
     df = df[
         (df["Region Code"] == "us-east-1")
         & (df["Unit"] == "Hrs")
         & (df["Currency"] == "USD")
-        & (df["Tenancy"].fillna("Shared") == "Shared")  # Ignore Dedicated/Host
+        & (df["Tenancy"].fillna("Shared") == "Shared")
         & (df["Operating System"].fillna("Linux") == "Linux")
-    ]
+    ].copy()
 
     on_demand: Dict[str, float] = (
         df[df["TermType"] == "OnDemand"]
         .groupby("Instance Type")["PricePerUnit"]
         .min()
-        .astype(float)
         .to_dict()
     )
 
@@ -70,7 +89,6 @@ def _load_aws_prices(csv_path: Path):
         df[ri_filter]
         .groupby("Instance Type")["PricePerUnit"]
         .min()
-        .astype(float)
         .to_dict()
     )
 

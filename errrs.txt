@@ -1,5 +1,4 @@
 (env) ➜  ~ python aws-priceing/openstack_aws_pricing_tool.py --cloud dc1-cdl-osp4 --project osp-c1npgt04-Infr-Arch --aws-csv aws-priceing/AmazonEC2-pricing-20250505.csv
-Fetching VMs: 100%|(env) ➜  ~ python aws-priceing/openstack_aws_pricing_tool.py --cloud dc1-cdl-osp4 --project osp-c1npgt04-Infr-Arch --aws-csv aws-priceing/AmazonEC2-pricing-20250505.csv
 Traceback (most recent call last):
   File "/home/srini/env/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 3802, in get_loc
     return self._engine.get_loc(casted_key)
@@ -12,33 +11,18 @@ KeyError: 'Instance Type'
 The above exception was the direct cause of the following exception:
 
 Traceback (most recent call last):
-  File "aws-priceing/openstack_aws_pricing_tool.py", line 229, in <module>
+  File "aws-priceing/openstack_aws_pricing_tool.py", line 222, in <module>
     main()
-  File "aws-priceing/openstack_aws_pricing_tool.py", line 216, in main
-    df, missing = build_report(conn, proj_id, args.aws_csv)
-  File "aws-priceing/openstack_aws_pricing_tool.py", line 129, in build_report
-    od_price, ri_price, spec_map = _extract_instance_prices(df_price)
-  File "aws-priceing/openstack_aws_pricing_tool.py", line 79, in _extract_instance_prices
-    spec_map[row["Instance Type"]] = (int(row["vCPU"]), int(float(row["Memory"].split()[0])))
+  File "aws-priceing/openstack_aws_pricing_tool.py", line 212, in main
+    df = build_report(conn, pid, args.aws_csv)
+  File "aws-priceing/openstack_aws_pricing_tool.py", line 136, in build_report
+    od_price, ri_price, spec_map = _instance_and_spec(price_df)
+  File "aws-priceing/openstack_aws_pricing_tool.py", line 91, in _instance_and_spec
+    spec_map[row['Instance Type']] = (int(row['Vcpu']), mem_gib)
   File "/home/srini/env/lib/python3.8/site-packages/pandas/core/series.py", line 981, in __getitem__
     return self._get_value(key)
   File "/home/srini/env/lib/python3.8/site-packages/pandas/core/series.py", line 1089, in _get_value
     loc = self.index.get_loc(label)
   File "/home/srini/env/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 3804, in get_loc
     raise KeyError(key) from err
-KeyError: 'Instance Type'███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 417/417 [00:09<00:00, 43.10vm/s]
-|    | project                          | server                           |   vcpus |   ram_GiB |   disk_GB | aws_type    |   od$/hr |   ri3yr$/hr |    od$/mo |   ri3yr$/mo |     od$/yr |   ri3yr$/yr |
-|----|----------------------------------|----------------------------------|---------|-----------|-----------|-------------|----------|-------------|-----------|-------------|------------|-------------|
-|  0 | ae0c4b74bf2e495690dea21b2c7de16a | linuxtest                        |       2 |         2 |        50 | t3.small    |   0.0208 |      0.0090 |   15.1840 |      6.5700 |   182.2080 |     78.8400 |
-|  1 | ae0c4b74bf2e495690dea21b2c7de16a | CDLDTIACVDM0006                  |       8 |        16 |       365 | m6a.2xlarge |   0.3456 |      0.1568 |  252.2880 |    114.4348 |  3027.4560 |   1373.2176 |
-|  2 | ae0c4b74bf2e495690dea21b2c7de16a | CDLDTIACVDM0007                  |       8 |        16 |       271 | m6a.2xlarge |   0.3456 |      0.1568 |  252.2880 |    114.4348 |  3027.4560 |   1373.2176 |
-|  3 | ae0c4b74bf2e495690dea21b2c7de16a | DC1CDL4-operatiosn-t_cloud_agent |       2 |         4 |        50 | t3.medium   |   0.0416 |      0.0180 |   30.3680 |     13.1400 |   364.4160 |    157.6800 |
-|  4 | ae0c4b74bf2e495690dea21b2c7de16a | CDLDTXASVPF0004                  |       4 |         8 |       205 | t3.xlarge   |   0.1664 |      0.0719 |  121.4720 |     52.4870 |  1457.6640 |    629.8440 |
-|  5 | ae0c4b74bf2e495690dea21b2c7de16a | DC1CDL-infra-arch-AZ_cloud_agent |       2 |         4 |        50 | t3.medium   |   0.0416 |      0.0180 |   30.3680 |     13.1400 |   364.4160 |    157.6800 |
-|  6 | ae0c4b74bf2e495690dea21b2c7de16a | CDLVDIVRO1514                    |       4 |         8 |       250 | t3.xlarge   |   0.1664 |      0.0719 |  121.4720 |     52.4870 |  1457.6640 |    629.8440 |
-|  7 | ae0c4b74bf2e495690dea21b2c7de16a | kishan-windows                   |       4 |        16 |       500 | t3.xlarge   |   0.1664 |      0.0719 |  121.4720 |     52.4870 |  1457.6640 |    629.8440 |
-|  8 | ae0c4b74bf2e495690dea21b2c7de16a | CDLVDIVROWA0359                  |       4 |         8 |       250 | t3.xlarge   |   0.1664 |      0.0719 |  121.4720 |     52.4870 |  1457.6640 |    629.8440 |
-|  9 | ae0c4b74bf2e495690dea21b2c7de16a | infra-dc1cdl4-AZ2_cloud_agent    |       2 |         4 |        50 | t3.medium   |   0.0416 |      0.0180 |   30.3680 |     13.1400 |   364.4160 |    157.6800 |
-| 10 | ae0c4b74bf2e495690dea21b2c7de16a | CDLVDIVROWA0665                  |       8 |        16 |       350 | m6a.2xlarge |   0.3456 |      0.1568 |  252.2880 |    114.4348 |  3027.4560 |   1373.2176 |
-| 11 | ae0c4b74bf2e495690dea21b2c7de16a | infra-dc1cdl4_cloud_agent        |       2 |         4 |        50 | t3.medium   |   0.0416 |      0.0180 |   30.3680 |     13.1400 |   364.4160 |    157.6800 |
-| 12 |                                  | TOTAL                            |      50 |       106 |      2441 |             |   1.8896 |      0.8389 | 1379.4080 |    612.3824 | 16552.8960 |   7348.5888 |
+KeyError: 'Instance Type'

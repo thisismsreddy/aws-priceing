@@ -84,17 +84,22 @@ def _instance_and_spec(df: pd.DataFrame):
         (df['Price Per Unit'] > 0)
     ].copy()
 
-    # spec map
+        # spec map (vCPU, Mem GiB) keyed by instance type
     spec_map: Dict[str, Tuple[int, int]] = {}
-    for _, row in inst.groupby('Instance Type').first().iterrows():
+    for itype, grp in inst.groupby('Instance Type'):
+        row = grp.iloc[0]
         mem_gib = int(float(str(row['Memory']).split()[0]))
-        spec_map[row['Instance Type']] = (int(row['Vcpu']), mem_gib)
+        spec_map[itype] = (int(row['Vcpu']), mem_gib)
 
     od = (inst[inst['Term Type'] == 'OnDemand']
            .groupby('Instance Type')['Price Per Unit']
            .min().to_dict())
 
     ri = (inst[(inst['Term Type'] == 'Reserved') &
+               (inst['Lease Contract Length'].str.startswith('3')) &
+               (inst['Purchase Option'] == 'No Upfront')]
+            .groupby('Instance Type')['Price Per Unit']
+            .min().to_dict()) (inst[(inst['Term Type'] == 'Reserved') &
                (inst['Lease Contract Length'].str.startswith('3')) &
                (inst['Purchase Option'] == 'No Upfront')]
             .groupby('Instance Type')['Price Per Unit']

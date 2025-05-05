@@ -1,17 +1,43 @@
-(env) ➜  ~ python aws-priceing/openstack_aws_pricing_tool.py --cloud dc1-cdl-osp4 --project osp-c1npgt04-Infr-Arch --aws-csv aws-priceing/AmazonEC2-pricing-20250505.csv
-VMs: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 417/417 [00:02<00:00, 150.06vm/s]
-|    | Project                          | Server                           | vCPU   | RAM_GiB   | Disk_GB   | AWS_Type    |   OnDemand_Hourly |   RI3yr_Hourly |   OnDemand_Monthly |   OnDemand_Yearly |   RI3yr_Monthly |   RI3yr_Yearly |
-|----|----------------------------------|----------------------------------|--------|-----------|-----------|-------------|-------------------|----------------|--------------------|-------------------|-----------------|----------------|
-|  0 | ae0c4b74bf2e495690dea21b2c7de16a | linuxtest                        | 2      | 2         | 50        | t4g.small   |            0.0223 |         0.0128 |            16.2640 |          195.1680 |          9.3290 |       111.9480 |
-|  1 | ae0c4b74bf2e495690dea21b2c7de16a | CDLDTIACVDM0006                  | 8      | 16        | 365       | t4g.2xlarge |            0.3088 |         0.1561 |           225.4240 |         2705.0880 |        113.9530 |      1367.4360 |
-|  2 | ae0c4b74bf2e495690dea21b2c7de16a | CDLDTIACVDM0007                  | 8      | 16        | 271       | t4g.2xlarge |            0.2985 |         0.1458 |           217.9040 |         2614.8480 |        106.4330 |      1277.1960 |
-|  3 | ae0c4b74bf2e495690dea21b2c7de16a | DC1CDL4-operatiosn-t_cloud_agent | 2      | 4         | 50        | t4g.medium  |            0.0391 |         0.0200 |            28.5280 |          342.3360 |         14.5850 |       175.0200 |
-|  4 | ae0c4b74bf2e495690dea21b2c7de16a | CDLDTXASVPF0004                  | 4      | 8         | 205       | t4g.xlarge  |            0.1569 |         0.0805 |           114.5120 |         1374.1440 |         58.7400 |       704.8800 |
-|  5 | ae0c4b74bf2e495690dea21b2c7de16a | DC1CDL-infra-arch-AZ_cloud_agent | 2      | 4         | 50        | t4g.medium  |            0.0391 |         0.0200 |            28.5280 |          342.3360 |         14.5850 |       175.0200 |
-|  6 | ae0c4b74bf2e495690dea21b2c7de16a | CDLVDIVRO1514                    | 4      | 8         | 250       | t4g.xlarge  |            0.1618 |         0.0854 |           118.1120 |         1417.3440 |         62.3400 |       748.0800 |
-|  7 | ae0c4b74bf2e495690dea21b2c7de16a | kishan-windows                   | 4      | 16        | 500       | t4g.xlarge  |            0.1892 |         0.1128 |           138.1120 |         1657.3440 |         82.3400 |       988.0800 |
-|  8 | ae0c4b74bf2e495690dea21b2c7de16a | CDLVDIVROWA0359                  | 4      | 8         | 250       | t4g.xlarge  |            0.1618 |         0.0854 |           118.1120 |         1417.3440 |         62.3400 |       748.0800 |
-|  9 | ae0c4b74bf2e495690dea21b2c7de16a | infra-dc1cdl4-AZ2_cloud_agent    | 2      | 4         | 50        | t4g.medium  |            0.0391 |         0.0200 |            28.5280 |          342.3360 |         14.5850 |       175.0200 |
-| 10 | ae0c4b74bf2e495690dea21b2c7de16a | CDLVDIVROWA0665                  | 8      | 16        | 350       | t4g.2xlarge |            0.3072 |         0.1545 |           224.2240 |         2690.6880 |        112.7530 |      1353.0360 |
-| 11 | ae0c4b74bf2e495690dea21b2c7de16a | infra-dc1cdl4_cloud_agent        | 2      | 4         | 50        | t4g.medium  |            0.0391 |         0.0200 |            28.5280 |          342.3360 |         14.5850 |       175.0200 |
-| 12 |                                  | TOTAL                            |        |           |           |             |            1.7627 |         0.9131 |          1286.7760 |        15441.3120 |        666.5680 |      7998.8160 |
+(env) ➜  aws-priceing git:(main) ✗ pythoh app.py
+zsh: command not found: pythoh
+(env) ➜  aws-priceing git:(main) ✗ python app.py
+ * Serving Flask app 'app'
+ * Debug mode: on
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://10.120.122.140:8080
+Press CTRL+C to quit
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 113-789-396
+10.120.122.140 - - [05/May/2025 13:52:28] "GET / HTTP/1.1" 500 -
+Traceback (most recent call last):
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1498, in __call__
+    return self.wsgi_app(environ, start_response)
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1476, in wsgi_app
+    response = self.handle_exception(e)
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1473, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 882, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 880, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 865, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "/home/srini/aws-priceing/app.py", line 129, in home
+    return render_template_string(FORM_PAGE, css=CSS, js=SORT_JS, template_folder='.', globals={'base':BASE_PAGE})
+  File "/home/srini/env/lib/python3.8/site-packages/flask/templating.py", line 162, in render_template_string
+    return _render(app, template, context)
+  File "/home/srini/env/lib/python3.8/site-packages/flask/templating.py", line 131, in _render
+    rv = template.render(context)
+  File "/home/srini/env/lib/python3.8/site-packages/jinja2/environment.py", line 1301, in render
+    self.environment.handle_exception()
+  File "/home/srini/env/lib/python3.8/site-packages/jinja2/environment.py", line 936, in handle_exception
+    raise rewrite_traceback_stack(source=source)
+  File "<template>", line 2, in top-level template code
+  File "/home/srini/env/lib/python3.8/site-packages/flask/templating.py", line 65, in get_source
+    return self._get_source_fast(environment, template)
+  File "/home/srini/env/lib/python3.8/site-packages/flask/templating.py", line 99, in _get_source_fast
+    raise TemplateNotFound(template)
+jinja2.exceptions.TemplateNotFound: base

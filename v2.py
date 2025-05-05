@@ -29,6 +29,18 @@ def _load_csv(path: Path) -> pd.DataFrame:
 
 def _norm(df):
     df.columns = (_SP.sub(' ', c.strip()).title() for c in df.columns)
+    alias = {
+        'Instancetype': 'Instance Type',
+        'Vpcu': 'Vcpu',
+        'Priceperunit': 'Price Per Unit',
+        'Pricedescription': 'Price Description',
+        'Price Description': 'Price Description',
+        'Termtype': 'Term Type',
+        'Leasecontractlength': 'Lease Contract Length',
+        'Purchaseoption': 'Purchase Option'
+    }
+    df.rename(columns={k: v for k, v in alias.items() if k in df.columns}, inplace=True):
+    df.columns = (_SP.sub(' ', c.strip()).title() for c in df.columns)
     df.rename(columns={'Instancetype':'Instance Type','Vpcu':'Vcpu','Priceperunit':'Price Per Unit','Termtype':'Term Type','Leasecontractlength':'Lease Contract Length','Purchaseoption':'Purchase Option'},inplace=True)
 
 def _pricing(df: pd.DataFrame):
@@ -59,11 +71,13 @@ def _pricing(df: pd.DataFrame):
         spec[itype] = (int(row['Vcpu']), mem_gib)
 
     od_df = inst[(inst['Term Type'] == 'OnDemand') &
-                 (inst['Price Description'].str.contains('per On Demand', case=False, na=False))]
+                 (inst.get('Price Description', '').str.contains('per On Demand', case=False, na=False))].str.contains('per On Demand', case=False, na=False))]
     od = od_df.groupby('Instance Type')['Price Per Unit'].min().to_dict()
 
     ri_df = inst[(inst['Term Type'] == 'Reserved') &
                  (inst['Lease Contract Length'].str.startswith('3')) &
+                 (inst['Purchase Option'] == 'No Upfront') &
+                 (~inst.get('Price Description', '').str.contains('Upfront Fee', case=False, na=False))].str.startswith('3')) &
                  (inst['Purchase Option'] == 'No Upfront') &
                  (~inst['Price Description'].str.contains('Upfront Fee', case=False, na=False))]
     ri = ri_df.groupby('Instance Type')['Price Per Unit'].min().to_dict()

@@ -151,9 +151,6 @@ BASE_CSS = '''
     width: 100%; height: 100%;
     background: rgba(255,255,255,0.8);
     z-index: 1050;
-    display: flex;
-    align-items: center;
-    justify-content: center;
   }
 </style>
 '''
@@ -169,7 +166,9 @@ FORM_HTML = '''<!doctype html>
 </head>
 <body>
   <div id="loading">
-    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+    <div class="d-flex align-items-center justify-content-center h-100">
+      <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+    </div>
   </div>
   <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
     <div class="container-fluid">
@@ -180,8 +179,8 @@ FORM_HTML = '''<!doctype html>
     <div class="card">
       <div class="card-body">
         <h5 class="card-title">AWS Pricing Comparison</h5>
-        <form method="post" onsubmit="document.getElementById('submit-btn').disabled=true; document.getElementById('loading').style.display='flex';">
-          <div class="	row mb-3">
+        <form method="post" onsubmit="document.getElementById('submit-btn').disabled=true; document.getElementById('loading').style.display='block';">
+          <div class="row mb-3">
             <div class="col-md-6">
               <label for="cloud" class="form-label">Cloud Name</label>
               <input type="text" class="form-control" id="cloud" name="cloud" value="{{ default_cloud }}" required>
@@ -215,17 +214,17 @@ RESULT_HTML = '''<!doctype html>
 <body>
   <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
     <div class="container-fluid">
-      <a class="navbarbrand" href="#">Pricing Tool</a>
+      <a class="navbar-brand" href="#">Pricing Tool</a>
     </div>
   </nav>
   <div class="container">
     <div class="card mt-4">
-      <div class="cardbody">
-        <h5 class="cardtitle">Comparison Results</h5>
+      <div class="card-body">
+        <h5 class="card-title">Comparison Results</h5>
         {% if df.empty %}
           <div class="alert alert-warning">No VMs found for the given project/cloud.</div>
         {% else %}
-          <div class="tableresponsive">
+          <div class="table-responsive">
             {{ df.to_html(classes='table table-hover table-striped', index=False, float_format='{:,.4f}'.format) | safe }}
           </div>
         {% endif %}

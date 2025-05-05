@@ -17,7 +17,7 @@ from typing import Dict, List, Optional, Tuple
 import pandas as pd
 from flask import Flask, jsonify, render_template_string, request
 from openstack import connection
-from openstack.exceptions import OpenStackCloudException
+from openstack.exceptions import OpenStackCloudException, ResourceNotFound
 
 # --- Constants ---
 HOURS_IN_MONTH = 730
@@ -37,7 +37,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # --- Helper Functions (Pricing Logic - Kept Intact) ---
 
 def _allowed_file(filename):
-    return '.' in filename and \           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def _load_csv(file_stream: io.BytesIO) -> pd.DataFrame:
     """Load AWS price CSV starting at header row from a file stream."""
@@ -47,16 +48,16 @@ def _load_csv(file_stream: io.BytesIO) -> pd.DataFrame:
         lines = content.splitlines()
         header = -1
         for i, line in enumerate(lines):
-            # Handle potential quotes around SKU
+            # Handle potential quotes around SKU and leading BOM/whitespace
             clean_line = line.lstrip().strip('"')
             if clean_line.startswith("SKU"):
                 header = i
                 break
         else:
-            # Try a looser match if exact 'SKU' not found (e.g., BOM characters)
+            # Try a looser match if exact 'SKU' not found (e.g., BOM characters, slight variations)
              for i, line in enumerate(lines):
-                if 'SKU' in line[:20]: # Check near the start
-                     logging.warning(f"Found 'SKU' header heuristically on line {i+1}. CSV might have leading issues.")
+                if 'SKU' in line.upper()[:20]: # Check near the start (case-insensitive check)
+                     logging.warning(f"Found 'SKU' header heuristically on line {i+1}. CSV might have leading issues or casing differences.")
                      header = i
                      break
              else:
@@ -73,12 +74,12 @@ def _load_csv(file_stream: io.BytesIO) -> pd.DataFrame:
 
 def _norm_cols(df: pd.DataFrame) -> None:
     """Normalise column names in‑place and add aliases."""
-    # Store original columns to check existence later
-    original_columns = {c.strip().title() for c in df.columns}
+    # Store original columns (normalized) to check existence later
+    normalized_cols_set = {_SPACE_RE.sub(" ", c.strip()).title() for c in df.columns}
 
     df.columns = (_SPACE_RE.sub(" ", c.strip()).title() for c in df.columns)
 
-    # Define aliases, check if the *original* (case-insensitive normalized) column existed
+    # Define aliases
     alias = {
         'Instancetype': 'Instance Type',
         'Vpcu': 'Vcpu',
@@ -119,36 +120,54 @@ def _extract_pricing(df: pd.DataFrame):
              raise ValueError("Could not find a suitable 'Price Per Unit' column after normalization.")
 
     df['Price Per Unit'] = pd.to_numeric(df['Price Per Unit'], errors='coerce')
-    df.dropna(subset=['Price Per Unit'], inplace=True) # Drop rows where conversion failed
+    # Drop rows where Price Per Unit is NaN AFTER coercion (those that couldn't be converted)
+    df.dropna(subset=['Price Per Unit'], inplace=True)
+
+
+    # Define columns used in filtering and ensure they are handled safely
+    filter_cols = ['Product Family', 'Region', 'Unit', 'Currency', 'Tenancy', 'Operating System', 'Current Generation']
+    # Create temporary lower/filled columns for robust filtering
+    for col in filter_cols:
+        if col in df.columns:
+            if df[col].dtype == 'object': # Only apply string methods to object type
+                 df[f'{col} Lower'] = df[col].str.lower()
+            # Handle specific fillna cases
+            if col == 'Tenancy':
+                 df[f'{col} Filled'] = df[col].fillna('Shared')
+            elif col == 'Operating System':
+                 df[f'{col} Filled'] = df[col].fillna('Linux')
+            elif col == 'Current Generation':
+                 df[f'{col} Filled'] = df[col].fillna('Yes')
+            else:
+                 # For other columns, just create the lower column if applicable
+                 pass # Handled by the 'object' dtype check above
+        else:
+            # Create dummy columns if original column is missing, so filters don't fail
+            df[f'{col} Lower'] = pd.Series(dtype=str)
+            df[f'{col} Filled'] = pd.Series(dtype=str) # Use string default for fillers
+
 
     # --- Base Compute Filter ---
-    required_cols = ['Product Family', 'Region', 'Unit', 'Currency']
-    missing_cols = [col for col in required_cols if col not in df.columns]
-    if missing_cols:
-        raise ValueError(f"Missing required columns for filtering: {', '.join(missing_cols)}")
-
-    # Ensure columns used in filtering exist before using .str accessor
-    df['Product Family Lower'] = df['Product Family'].str.lower()
-    df['Region Lower'] = df['Region'].str.lower()
-    df['Tenancy Filled'] = df.get('Tenancy', pd.Series(dtype=str)).fillna('Shared')
-    df['OS Filled'] = df.get('Operating System', pd.Series(dtype=str)).fillna('Linux')
-    df['Current Gen Filled'] = df.get('Current Generation', pd.Series(dtype=str)).fillna('Yes')
-
-
     base = df[
         (df['Product Family Lower'] == 'compute instance') &
         (df['Region Lower'] == 'us-east-1') &
-        (df['Unit'] == 'Hrs') &
-        (df['Currency'] == 'USD') &
+        (df['Unit'] == 'Hrs') & # 'Unit' itself is fine, no need for Lower/Filled if checked directly
+        (df['Currency'] == 'USD') & # 'Currency' itself is fine
         (df['Tenancy Filled'] == 'Shared') &
         (df['OS Filled'] == 'Linux') &
         (df['Current Gen Filled'] == 'Yes') &
         (df['Price Per Unit'] > 0)
     ].copy()
 
+    # Clean up temporary columns after filtering
+    temp_filter_cols = [f'{col} Lower' for col in filter_cols if f'{col} Lower' in df.columns] + \
+                       [f'{col} Filled' for col in filter_cols if f'{col} Filled' in df.columns]
+    df.drop(columns=temp_filter_cols, inplace=True, errors='ignore')
+
+
     if base.empty:
         logging.warning("Base compute filter (us-east-1, Linux, Shared, Hrs, USD, Current Gen) resulted in an empty DataFrame. Check CSV content and filters.")
-        return {}, {}, {}, 0.0
+        return {}, {}, {}, 0.0 # Return empty structures
 
     # --- Spec Map ---
     spec: Dict[str, Tuple[int, int]] = {}
@@ -158,59 +177,83 @@ def _extract_pricing(df: pd.DataFrame):
 
     for itype, grp in base.groupby('Instance Type'):
         if grp.empty: continue
-        first = grp.iloc[0]
+        # Find the first row in the group that has non-null Vcpu and Memory
+        valid_row = grp.dropna(subset=['Vcpu', 'Memory']).iloc[0] if not grp.dropna(subset=['Vcpu', 'Memory']).empty else None
+
+        if valid_row is None:
+             logging.warning(f"Skipping instance type '{itype}' due to missing Vcpu or Memory in all rows.")
+             continue
+
         try:
-            mem_str = str(first.get('Memory', '0 GiB')).split()[0]
+            mem_str = str(valid_row.get('Memory', '0 GiB')).split()[0]
             # Handle potential locale-specific floats (e.g., "1,024.5" or "1.024,5") - normalize to use '.'
-            mem_str_norm = mem_str.replace(',', '.')
+            mem_str_norm = mem_str.replace(',', '') # Remove thousand separators first
+            if ',' in mem_str_norm and '.' in mem_str_norm: # If both exist, likely comma is decimal
+                 mem_str_norm = mem_str_norm.replace('.', '').replace(',', '.')
+            elif ',' in mem_str_norm: # Only comma, likely decimal
+                 mem_str_norm = mem_str_norm.replace(',', '.')
+
             mem_gib = int(float(mem_str_norm))
-            vcpu_val_str = str(first['Vcpu']).replace(',', '.')
+
+            vcpu_val_str = str(valid_row['Vcpu']).replace(',', '') # Remove thousand separators
             vcpu_val = int(float(vcpu_val_str)) # Handle Vcpu potentially being float like "2.0"
+
             spec[str(itype)] = (vcpu_val, mem_gib)
         except (ValueError, TypeError, IndexError) as e:
-            logging.warning(f"Could not parse spec for '{itype}': {e} - Memory='{first.get('Memory', 'N/A')}', Vcpu='{first.get('Vcpu', 'N/A')}'. Skipping this type.")
+            logging.warning(f"Could not parse spec for '{itype}': {e} - Memory='{valid_row.get('Memory', 'N/A')}', Vcpu='{valid_row.get('Vcpu', 'N/A')}'. Skipping this type.")
             continue
 
     # --- OnDemand Pricing ---
-    od_rows = base[(base.get('Term Type', pd.Series(dtype=str)) == 'OnDemand') &
-                   (base.get('Price Description', pd.Series(dtype=str)).str.contains('linux on demand', case=False, na=False))] # More specific OD match
-    if 'Instance Type' not in od_rows.columns or od_rows.empty:
+    if 'Term Type' not in base.columns or 'Price Description' not in base.columns or 'Instance Type' not in base.columns:
+         logging.warning("Missing columns required for OD pricing (Term Type, Price Description, or Instance Type). OD prices will be empty.")
          od = {}
-         logging.warning("No OnDemand rows found matching criteria. OD prices will be empty.")
     else:
-         # Prefer minimum price, then maybe check description further if needed
-         od = od_rows.loc[od_rows.groupby('Instance Type')['Price Per Unit'].idxmin()]
-         od = od.set_index('Instance Type')['Price Per Unit'].to_dict()
+        od_rows = base[(base['Term Type'] == 'OnDemand') &
+                       (base['Price Description'].str.contains('linux on demand', case=False, na=False))]
+
+        if od_rows.empty:
+             od = {}
+             logging.warning("No OnDemand rows found matching criteria. OD prices will be empty.")
+        else:
+             # Prefer minimum price for each instance type
+             od = od_rows.loc[od_rows.groupby('Instance Type')['Price Per Unit'].idxmin()]
+             od = od.set_index('Instance Type')['Price Per Unit'].to_dict()
 
 
     # --- Reserved Instance Pricing ---
-    ri_rows = base[(base.get('Term Type', pd.Series(dtype=str)) == 'Reserved') &
-                   (base.get('Lease Contract Length', pd.Series(dtype=str)).str.strip().str.startswith('3', na=False)) & # Handle whitespace
-                   (base.get('Purchase Option', pd.Series(dtype=str)) == 'No Upfront') &
-                   (base.get('Price Description', pd.Series(dtype=str)).str.contains('linux reserved instance', case=False, na=False)) & # More specific RI match
-                   (~base.get('Price Description', pd.Series(dtype=str)).str.contains('upfront fee', case=False, na=False))]
-
-    if 'Instance Type' not in ri_rows.columns or ri_rows.empty:
-        ri = {}
-        logging.warning("No 3yr No Upfront RI rows found matching criteria. RI prices will be empty.")
+    ri_cols = ['Term Type', 'Lease Contract Length', 'Purchase Option', 'Price Description', 'Instance Type']
+    if not all(col in base.columns for col in ri_cols):
+         logging.warning(f"Missing columns required for RI pricing ({', '.join([c for c in ri_cols if c not in base.columns])}). RI prices will be empty.")
+         ri = {}
     else:
-        # Group by instance type and find the minimum price for that type
-        ri = ri_rows.loc[ri_rows.groupby('Instance Type')['Price Per Unit'].idxmin()]
-        ri = ri.set_index('Instance Type')['Price Per Unit'].to_dict()
+        ri_rows = base[(base['Term Type'] == 'Reserved') &
+                       (base['Lease Contract Length'].str.strip().str.startswith('3', na=False)) & # Handle whitespace
+                       (base['Purchase Option'] == 'No Upfront') &
+                       (base['Price Description'].str.contains('linux reserved instance', case=False, na=False)) & # More specific RI match
+                       (~base['Price Description'].str.contains('upfront fee', case=False, na=False))] # Exclude upfront fees
+
+        if ri_rows.empty:
+            ri = {}
+            logging.warning("No 3yr No Upfront RI rows found matching criteria. RI prices will be empty.")
+        else:
+            # Group by instance type and find the minimum price for that type
+            ri = ri_rows.loc[ri_rows.groupby('Instance Type')['Price Per Unit'].idxmin()]
+            ri = ri.set_index('Instance Type')['Price Per Unit'].to_dict()
 
     # --- GP3 Storage Pricing ---
     # Use the original df for storage pricing (after normalization)
-    # Re-check required columns
     storage_required_cols = ['Product Family', 'Volume Api Name', 'Region', 'Unit', 'Term Type', 'Price Per Unit']
-    missing_storage_cols = [c for c in storage_required_cols if c not in df.columns]
-    if missing_storage_cols:
-        logging.warning(f"Missing columns needed for GP3 Storage pricing: {', '.join(missing_storage_cols)}. Storage cost will be 0.")
+    if not all(col in df.columns for col in storage_required_cols):
+        logging.warning(f"Missing columns needed for GP3 Storage pricing: {', '.join([c for c in storage_required_cols if c not in df.columns])}. Storage cost will be 0.")
         gp3_hr = 0.0
     else:
-        # Ensure relevant columns have expected types before filtering
-        df['Volume Api Name Lower'] = df['Volume Api Name'].str.lower()
-        df['Unit Lower'] = df['Unit'].str.lower()
-        df['Term Type Lower'] = df['Term Type'].str.lower()
+        # Create temporary lower columns for filtering
+        df['Volume Api Name Lower'] = df.get('Volume Api Name', pd.Series(dtype=str)).str.lower()
+        df['Unit Lower'] = df.get('Unit', pd.Series(dtype=str)).str.lower()
+        df['Term Type Lower'] = df.get('Term Type', pd.Series(dtype=str)).str.lower()
+        df['Product Family Lower'] = df.get('Product Family', pd.Series(dtype=str)).str.lower()
+        df['Region Lower'] = df.get('Region', pd.Series(dtype=str)).str.lower()
+
 
         gp3_rows = df[
             (df['Product Family Lower'] == 'storage') &
@@ -220,6 +263,9 @@ def _extract_pricing(df: pd.DataFrame):
             (df['Term Type Lower'] == 'ondemand') &
             (df['Price Per Unit'] > 0)
         ]
+
+        # Clean up temporary columns
+        df.drop(columns=[col for col in ['Product Family Lower', 'Region Lower', 'Volume Api Name Lower', 'Unit Lower', 'Term Type Lower'] if col in df.columns], inplace=True, errors='ignore')
 
         gp3_hr = 0.0
         if not gp3_rows.empty:
@@ -233,8 +279,6 @@ def _extract_pricing(df: pd.DataFrame):
             logging.warning("No matching gp3 storage rows found (us-east-1, OnDemand, GB-Mo). Storage cost will be 0.")
 
     logging.info(f"Pricing extracted: {len(od)} OD types, {len(ri)} RI types, {len(spec)} Specs, gp3/hr={gp3_hr:.8f}")
-    # Clean up temporary columns
-    df.drop(columns=[col for col in ['Product Family Lower', 'Region Lower', 'Tenancy Filled', 'OS Filled', 'Current Gen Filled', 'Volume Api Name Lower', 'Unit Lower', 'Term Type Lower'] if col in df.columns], inplace=True, errors='ignore')
 
     return od, ri, spec, gp3_hr
 
@@ -242,7 +286,9 @@ def _extract_pricing(df: pd.DataFrame):
 def _pick_shape(vcpu: int, ram_mb: int, prices: Dict[str, float], spec: Dict[str, Tuple[int, int]]):
     """Picks the cheapest AWS instance type meeting vCPU/RAM requirements."""
     if not prices or not spec: return (None, None)
-    if vcpu <= 0 or ram_mb <= 0: return (None, None) # Cannot match invalid requirements
+    if vcpu is None or ram_mb is None or vcpu <= 0 or ram_mb <= 0:
+        logging.debug(f"Invalid input specs: vCPU={vcpu}, RAM={ram_mb}MB. Cannot pick shape.")
+        return (None, None) # Cannot match invalid requirements
 
     ram_gib = (ram_mb + 1023) // 1024
     choices = []
@@ -251,10 +297,11 @@ def _pick_shape(vcpu: int, ram_mb: int, prices: Dict[str, float], spec: Dict[str
         # Ensure price is valid number
         if instance_spec and isinstance(p, (int, float)) and p > 0:
             instance_vcpu, instance_ram_gib = instance_spec
-            if instance_vcpu >= vcpu and instance_ram_gib >= ram_gib:
+            if instance_vcpu is not None and instance_ram_gib is not None and instance_vcpu >= vcpu and instance_ram_gib >= ram_gib:
                 choices.append((t, p, instance_vcpu, instance_ram_gib)) # Include specs for sorting
 
     if not choices:
+        logging.debug(f"No AWS instance type found meeting vCPU={vcpu}, RAM={ram_gib}GiB requirements.")
         return (None, None)
 
     # Sort by price (primary), then vCPU (secondary, prefer smaller fit), then RAM (tertiary)
@@ -280,44 +327,48 @@ def build_report(conn, project_id: Optional[str], csv_stream: io.BytesIO):
 
     if not spec:
          logging.warning("AWS Spec dictionary is empty. Cannot map instance types.")
-         # Depending on requirements, maybe raise error or return empty report
+         # Continue, but all 'AWS Type' and costs will likely be 'N/A' or None
+         # Depending on requirements, maybe raise error if spec is *required*
          # raise ValueError("Could not extract any valid instance specifications from the AWS CSV.")
 
 
     try:
         flavors_list = list(conn.compute.flavors())
-        flavors = {f.id: f for f in flavors_list}
+        flavors = {f.id: f for f in flavors_list if f.id is not None} # Only add if ID exists
         # Add name mapping as fallback - careful with duplicate names
-        flavors_by_name = {f.name: f for f in flavors_list}
+        flavors_by_name = {f.name: f for f in flavors_list if f.name is not None}
         flavors.update(flavors_by_name) # ID mapping takes precedence if collision
-        logging.info(f"Fetched {len(flavors_list)} OpenStack flavors ({len(flavors)} unique refs).")
+        logging.info(f"Fetched {len(flavors_list)} OpenStack flavors ({len(flavors)} unique references after de-duping).")
         if not flavors:
-            raise ConnectionError("No flavors found in the OpenStack cloud.")
+            raise ConnectionError("No flavors found in the OpenStack cloud or flavors have no ID/Name.")
     except OpenStackCloudException as e:
         logging.error(f"Failed to fetch OpenStack flavors: {e}")
         raise ConnectionError(f"Could not fetch flavors from OpenStack: {e}")
     except Exception as e:
-        logging.error(f"Unexpected error fetching flavors: {e}")
+        logging.error(f"Unexpected error fetching flavors: {e}\n{traceback.format_exc()}")
         raise ConnectionError(f"Unexpected error fetching flavors: {e}")
 
 
-    seen_vol: Dict[str, int] = {}
+    seen_vol: Dict[str, int] = {} # Cache for volume sizes
     rows: List[Dict[str, object]] = []
-    servers = []
+    servers_generator = None # Initialize generator variable
 
     try:
         project_display_name = "ALL" # Default for logging
         # Determine if we need all projects or a specific one
         if project_id is None: # Indicates 'all projects' was selected
             servers_generator = conn.compute.servers(details=True, all_projects=True)
-            logging.info("Fetching servers for ALL projects...")
+            logging.info("Initiating fetch for ALL servers across all projects...")
         else:
-            # Project ID should already be validated in the API route
+            # Project ID should already be validated in the API route, but fetch details for logging
             try:
                 project = conn.identity.get_project(project_id)
                 project_display_name = f"{project.name} ({project_id})"
-                logging.info(f"Fetching servers for project: {project_display_name}")
+                logging.info(f"Initiating fetch for servers in project: {project_display_name}")
                 servers_generator = conn.compute.servers(details=True, project_id=project_id)
+            except ResourceNotFound:
+                 # This case should ideally be caught earlier, but added for robustness
+                 raise ValueError(f"OpenStack project '{project_id}' not found.")
             except OpenStackCloudException as e:
                  logging.error(f"Error fetching project details {project_id} (should have been verified earlier): {e}")
                  raise ValueError(f"Could not access project '{project_id}'. Check permissions.")
@@ -326,70 +377,74 @@ def build_report(conn, project_id: Optional[str], csv_stream: io.BytesIO):
         server_count = 0
         processed_count = 0
         skipped_no_flavor = 0
-        skipped_no_match = 0
+        skipped_no_aws_match = 0
 
+        # Iterate through servers (potentially large list)
         for srv in servers_generator:
              server_count += 1
              if server_count % 100 == 0:
-                 logging.info(f"Checking server {server_count}...")
+                 logging.info(f"Processing server {server_count}...")
 
              # Filter again just in case `all_projects=True` still returns others (unlikely)
-             if project_id and srv.project_id != project_id:
+             if project_id is not None and srv.project_id != project_id:
                  continue
 
-             f_ref = srv.flavor.get('id') # Prefer ID
-             flav = flavors.get(f_ref)
+             f_ref_id = srv.flavor.get('id')
+             f_ref_name = srv.flavor.get('original_name') or srv.flavor.get('name')
+             flav = None
+
+             if f_ref_id:
+                 flav = flavors.get(f_ref_id)
+             if not flav and f_ref_name:
+                 flav = flavors.get(f_ref_name)
+                 if flav:
+                      logging.debug(f"Server '{srv.name}' ({srv.id}): Found flavor by name '{f_ref_name}' after ID '{f_ref_id}' failed.")
 
              if not flav:
-                  f_ref_name = srv.flavor.get('original_name') or srv.flavor.get('name')
-                  if f_ref_name:
-                      flav = flavors.get(f_ref_name)
-                      if flav:
-                          logging.debug(f"Server '{srv.name}' ({srv.id}): Found flavor by name '{f_ref_name}' after ID '{f_ref}' failed.")
-                      else:
-                          logging.warning(f"Server '{srv.name}' ({srv.id}): Flavor ID '{f_ref}' and name '{f_ref_name}' not found in fetched list. Skipping.")
-                          skipped_no_flavor += 1
-                          continue
-                  else:
-                       logging.warning(f"Server '{srv.name}' ({srv.id}): Flavor reference missing or not found (ID: '{f_ref}', Name: None). Skipping.")
-                       skipped_no_flavor += 1
-                       continue
-
-             # Ensure flavor has necessary attributes
-             if not all(hasattr(flav, attr) for attr in ['vcpus', 'ram', 'disk']):
-                  logging.warning(f"Server '{srv.name}' ({srv.id}): Flavor '{f_ref}' is missing required attributes (vcpus, ram, disk). Skipping.")
-                  skipped_no_flavor += 1
-                  continue
-
-             vcpus, ram_mb, root_disk = flav.vcpus, flav.ram, flav.disk
-
-             # Handle missing flavor specs gracefully
-             if vcpus is None or ram_mb is None:
-                 logging.warning(f"Server '{srv.name}' ({srv.id}): Flavor '{f_ref}' has missing vCPU ({vcpus}) or RAM ({ram_mb}). Skipping.")
+                 logging.warning(f"Server '{srv.name}' ({srv.id}): Flavor reference '{f_ref_id or f_ref_name or 'N/A'}' not found/resolved. Skipping server.")
                  skipped_no_flavor += 1
                  continue
 
-             disk = root_disk if root_disk is not None else 0
+             # Ensure flavor has necessary attributes and they are not None
+             vcpus = getattr(flav, 'vcpus', None)
+             ram_mb = getattr(flav, 'ram', None)
+             root_disk = getattr(flav, 'disk', None)
+
+             if vcpus is None or ram_mb is None:
+                 logging.warning(f"Server '{srv.name}' ({srv.id}): Flavor '{flav.name}' ({flav.id}) has missing vCPU ({vcpus}) or RAM ({ram_mb}). Skipping.")
+                 skipped_no_flavor += 1
+                 continue
+
+             disk = root_disk if root_disk is not None else 0 # Handle potential None root disk value
+
 
              # Get attached volumes
              try:
                  # Convert generator to list to avoid potential issues if iterated multiple times or connection drops
                  attachments = list(conn.compute.volume_attachments(server=srv))
+                 logging.debug(f"Server '{srv.name}' ({srv.id}): Found {len(attachments)} volume attachments.")
                  for att in attachments:
-                     vol_id = att.volume_id # Correct attribute
-                     if not vol_id: continue
+                     vol_id = getattr(att, 'volume_id', None) # Use getattr for safety
+                     if not vol_id: continue # Skip attachments with no volume_id
                      if vol_id not in seen_vol:
                          try:
-                             # Fetch volume details only once
+                             # Fetch volume details only once and cache size
                              volume = conn.block_storage.get_volume(vol_id)
-                             seen_vol[vol_id] = volume.size if volume and volume.size is not None else 0
+                             vol_size = getattr(volume, 'size', 0) # Get size, default to 0 if None
+                             seen_vol[vol_id] = vol_size
                              logging.debug(f"Fetched volume {vol_id} size: {seen_vol[vol_id]} GB")
                          except OpenStackCloudException as e:
                              logging.warning(f"Could not get volume details for {vol_id} attached to {srv.name}: {e}. Assuming size 0.")
                              seen_vol[vol_id] = 0 # Cache failure as 0 size
-                     disk += seen_vol.get(vol_id, 0) # Add cached size
+                         except Exception as e:
+                             logging.warning(f"Unexpected error getting volume {vol_id} for {srv.name}: {e}. Assuming size 0.")
+                             seen_vol[vol_id] = 0
+                     disk += seen_vol.get(vol_id, 0) # Add cached size, default to 0 if lookup failed
+
              except OpenStackCloudException as e:
                 logging.warning(f"Could not list volume attachments for server {srv.name}: {e}. Disk size might be missing attached volumes.")
+             except Exception as e:
+                 logging.warning(f"Unexpected error listing volume attachments for server {srv.name}: {e}. Disk size might be missing attached volumes.")
 
 
              # Find matching AWS instance type using extracted pricing data
@@ -397,21 +452,22 @@ def build_report(conn, project_id: Optional[str], csv_stream: io.BytesIO):
 
              if itype is None:
                  logging.debug(f"Server '{srv.name}' ({srv.id}) - vCPU={vcpus}, RAM={ram_mb}MB: No matching AWS OnDemand instance found in price list.")
-                 # Still try RI mapping? If OD mapping failed, RI likely will too if based on same spec.
-                 ri_hr_inst = None
-                 skipped_no_match += 1
-                 # Option: Still include row with N/A for costs, or skip entirely? Include for now.
+                 ri_hr_inst = None # If OD match failed, RI match based on that type will also fail
+                 skipped_no_aws_match += 1
              else:
                   # RI price lookup is direct using the matched OD type 'itype'
-                  ri_hr_inst = ri.get(itype) if ri else None # Ensure ri dict exists
-                  if not ri_hr_inst:
+                  ri_hr_inst = ri.get(itype) if ri and itype in ri else None # Ensure ri dict exists and type is in it
+                  if ri_hr_inst is None: # Check specifically for None after get()
                       logging.debug(f"Server '{srv.name}' ({srv.id}): Found OD match '{itype}', but no corresponding RI price found.")
 
 
              # Calculate storage cost safely
-             storage_hr = disk * gp3 if disk is not None and gp3 is not None and gp3 > 0 else 0
+             # Ensure disk is a number and not None, gp3 is a number > 0
+             storage_hr = (disk if isinstance(disk, (int, float)) and disk is not None else 0) * (gp3 if isinstance(gp3, (int, float)) and gp3 > 0 else 0)
+
 
              # Calculate final costs, handling None values from mapping/lookups
+             # If instance cost is None, the total cost should also be None
              od_final = (od_hr_inst + storage_hr) if od_hr_inst is not None else None
              ri_final = (ri_hr_inst + storage_hr) if ri_hr_inst is not None else None
 
@@ -419,7 +475,7 @@ def build_report(conn, project_id: Optional[str], csv_stream: io.BytesIO):
                  'Project': srv.project_id,
                  'Server': srv.name,
                  'vCPU': vcpus,
-                 'RAM_GiB': (ram_mb + 1023) // 1024 if ram_mb else 0,
+                 'RAM_GiB': (ram_mb + 1023) // 1024 if isinstance(ram_mb, int) and ram_mb is not None else 0,
                  'Disk_GB': disk,
                  'AWS_Type': itype or 'N/A', # Use 'N/A' if no match found
                  'OnDemand_Hourly': od_final,
@@ -428,7 +484,7 @@ def build_report(conn, project_id: Optional[str], csv_stream: io.BytesIO):
              processed_count += 1
 
         logging.info(f"Finished processing servers for project: {project_display_name}.")
-        logging.info(f"Total servers checked: {server_count}. Added to report: {processed_count}. Skipped (no flavor/spec): {skipped_no_flavor}. Skipped (no AWS match): {skipped_no_match}.")
+        logging.info(f"Total servers checked: {server_count}. Added to report: {processed_count}. Skipped (no flavor/spec): {skipped_no_flavor}. Skipped (no AWS instance match): {skipped_no_aws_match}.")
 
     except OpenStackCloudException as e:
         logging.error(f"Error during OpenStack server/volume processing: {e}")
@@ -452,22 +508,28 @@ def build_report(conn, project_id: Optional[str], csv_stream: io.BytesIO):
     # Calculate Monthly/Yearly costs
     for col in ['OnDemand_Hourly', 'RI3yr_Hourly']:
         if col in df.columns:
-            # Convert column to numeric, coercing errors (like None) to NaN
+            # Convert column to numeric, coercing errors (like None/NaN) to NaN.
+            # Calculations with NaN result in NaN, which is correct for missing costs.
             numeric_col = pd.to_numeric(df[col], errors='coerce')
             df[col.replace('Hourly', 'Monthly')] = numeric_col * HOURS_IN_MONTH
             df[col.replace('Hourly', 'Yearly')] = numeric_col * HOURS_IN_YEAR
         else:
-             # This case should ideally not happen if rows are appended correctly
              logging.error(f"Expected column '{col}' not found in DataFrame during final calculation.")
              df[col.replace('Hourly', 'Monthly')] = None
              df[col.replace('Hourly', 'Yearly')] = None
 
     # Add TOTAL row
     total_row = {}
-    numeric_cols_for_sum = df.select_dtypes(include='number').columns
+    # Select columns that *should* contain numbers for summation
+    numeric_cols_to_sum = ['vCPU', 'RAM_GiB', 'Disk_GB',
+                           'OnDemand_Hourly', 'RI3yr_Hourly',
+                           'OnDemand_Monthly', 'OnDemand_Yearly',
+                           'RI3yr_Monthly', 'RI3yr_Yearly']
+
     for c in df.columns:
-        if c in numeric_cols_for_sum:
-            total_row[c] = df[c].sum(skipna=True) # Ensure NaNs are skipped
+        if c in numeric_cols_to_sum:
+             # Calculate sum, skipping NaNs. Ensure the column is numeric first.
+            total_row[c] = pd.to_numeric(df[c], errors='coerce').sum(skipna=True)
         elif c == 'Server':
             total_row[c] = 'TOTAL'
         else:
@@ -496,32 +558,35 @@ HTML_TEMPLATE = """
     <title>OpenStack vs AWS Pricing</title>
     <!-- DataTables CSS from CDN -->
     <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
-    <!-- jQuery UI CSS (optional, for theming) -->
-    <!-- <link rel="stylesheet" type="text/css" href="https://code.jquery.com/ui/1.13.2/themes/smoothness/jquery-ui.css"> -->
+    <!-- Optional: DataTables Buttons CSS -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
 
     <style>
         /* --- Embedded CSS --- */
         body {{
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            margin: 20px;
+            margin: 0; /* Remove default body margin */
+            padding: 20px; /* Add overall padding */
             background-color: #f4f7f6;
             color: #333;
-            font-size: 14px; /* Slightly smaller base font */
+            font-size: 14px;
+            line-height: 1.5; /* Improved readability */
         }}
         .container {{
-            max-width: 95%;
-            margin: auto;
+            max-width: 1400px; /* Increased max width */
+            margin: 20px auto; /* Center with top/bottom margin */
             background-color: #fff;
-            padding: 20px;
+            padding: 20px 30px; /* More padding on sides */
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }}
         h1, h2 {{
             text-align: center;
             color: #2c3e50;
+            margin-top: 0; /* Remove top margin */
         }}
         h1 {{ margin-bottom: 30px; }}
-        h2 {{ margin-top: 40px; border-bottom: 1px solid #eee; padding-bottom: 10px; }}
+        h2 {{ margin-top: 40px; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }}
 
         form {{
             margin-bottom: 30px;
@@ -536,49 +601,50 @@ HTML_TEMPLATE = """
         label {{
             display: block;
             margin-bottom: 6px;
-            font-weight: 600; /* Bolder labels */
+            font-weight: 600;
             color: #555;
         }}
-        input[type="text"], input[type="file"], select {{ /* Added select styling */
-            width: 100%; /* Full width */
-            padding: 10px; /* More padding */
+        input[type="text"], input[type="file"], select {{
+            width: 100%;
+            padding: 10px;
             border: 1px solid #ccc;
             border-radius: 4px;
-            box-sizing: border-box; /* Include padding in width */
+            box-sizing: border-box;
             font-size: 14px;
         }}
         input[type="file"] {{
-            padding: 5px; /* Less padding for file input */
-            background-color: #fff; /* Ensure white background */
+            padding: 5px;
+            background-color: #fff;
         }}
         .form-row {{
             display: flex;
-            gap: 25px; /* More space between items */
-            align-items: flex-end; /* Align items to bottom */
+            gap: 25px;
+            align-items: flex-end;
             flex-wrap: wrap;
         }}
         .form-row .form-group {{
-            flex: 1; /* Allow flexible growth */
-            min-width: 220px; /* Minimum width before wrapping */
+            flex: 1;
+            min-width: 220px;
         }}
         .form-group.checkbox-group {{
-            flex: 0 0 auto; /* Don't grow checkbox group */
-            align-self: center; /* Center checkbox vertically */
-            padding-bottom: 10px; /* Align baseline with inputs */
+            flex: 0 0 auto;
+            align-self: center;
+            padding-bottom: 10px;
         }}
         .checkbox-group label {{
             display: inline;
             margin-left: 5px;
-            font-weight: normal; /* Normal weight for checkbox label */
+            font-weight: normal;
         }}
         input[type="checkbox"] {{
             margin-right: 5px;
             vertical-align: middle;
+            transform: scale(1.2); /* Slightly larger checkbox */
         }}
 
         button[type="submit"] {{
-            padding: 12px 25px; /* Larger button */
-            background-color: #3498db; /* Blue color */
+            padding: 12px 25px;
+            background-color: #3498db;
             color: white;
             border: none;
             border-radius: 4px;
@@ -587,17 +653,17 @@ HTML_TEMPLATE = """
             transition: background-color 0.2s ease;
         }}
         button[type="submit"]:hover {{
-            background-color: #2980b9; /* Darker blue */
+            background-color: #2980b9;
         }}
         button[type="submit"]:disabled {{
-            background-color: #bdc3c7; /* Grey when disabled */
+            background-color: #bdc3c7;
             cursor: not-allowed;
         }}
 
         #loading {{
             display: none;
             text-align: center;
-            margin: 30px auto; /* Center horizontally */
+            margin: 30px auto;
             font-size: 1.2em;
             color: #555;
         }}
@@ -610,47 +676,58 @@ HTML_TEMPLATE = """
 
         #error-message {{
             display: none;
-            color: #c0392b; /* Red color */
+            color: #c0392b;
             border: 1px solid #e74c3c;
             padding: 15px;
             margin-top: 20px;
             border-radius: 4px;
-            background-color: #fbeae5; /* Light red background */
+            background-color: #fbeae5;
+            margin-bottom: 20px; /* Add margin below error */
         }}
 
         #results {{
             margin-top: 30px;
-            display: none; /* Hidden initially */
+            display: none;
         }}
 
         /* DataTables Enhancements */
         .dataTables_wrapper {{
-            overflow-x: auto; /* Ensure horizontal scroll works */
+            overflow-x: auto;
             padding-top: 10px;
+            padding-bottom: 10px; /* Add padding below table controls */
         }}
         table.dataTable {{
-            width: 100% !important; /* Ensure table uses full width */
-            border-collapse: collapse !important; /* Cleaner borders */
-            margin: 0 auto; /* Center table if container allows */
+            width: 100% !important;
+            border-collapse: collapse !important;
+            margin: 0 auto;
+            border: 1px solid #ddd; /* Add border around table */
         }}
         table.dataTable thead th {{
-            background-color: #eef1f5; /* Lighter header */
+            background-color: #eef1f5;
             color: #333;
             font-weight: 600;
-            border-bottom: 2px solid #ddd; /* Stronger bottom border */
-            text-align: left; /* Align headers left by default */
-            padding: 10px 12px; /* Adjust padding */
+            border-bottom: 2px solid #ddd;
+            text-align: left;
+            padding: 10px 12px;
+        }}
+         table.dataTable tfoot th {{ /* Style for footer if used */
+            background-color: #eef1f5;
+            color: #333;
+            font-weight: 600;
+             border-top: 2px solid #ddd;
+            text-align: left;
+            padding: 10px 12px;
         }}
         table.dataTable tbody tr:nth-child(even) {{
-            background-color: #f9fafb; /* Subtle striping */
+            background-color: #f9fafb;
         }}
         table.dataTable tbody tr:hover {{
-            background-color: #f0f5f9; /* Hover effect */
+            background-color: #f0f5f9;
         }}
         table.dataTable tbody td {{
-            padding: 8px 12px; /* Consistent padding */
-            border-bottom: 1px solid #ecf0f1; /* Lighter row border */
-            vertical-align: middle; /* Align cell content vertically */
+            padding: 8px 12px;
+            border-bottom: 1px solid #ecf0f1;
+            vertical-align: middle;
         }}
         /* Right-align numeric columns */
         table.dataTable td.dt-right, table.dataTable th.dt-right {{
@@ -660,34 +737,46 @@ HTML_TEMPLATE = """
         /* Style for the TOTAL row */
         table.dataTable tbody tr:last-child {{
             font-weight: bold;
-            background-color: #e9ecef !important; /* Distinct background for total */
+            background-color: #e9ecef !important;
             color: #000;
         }}
         table.dataTable tbody tr:last-child td {{
-             border-top: 2px solid #ccc; /* Separator line above total */
+             border-top: 2px solid #ccc;
         }}
         table.dataTable tbody tr:last-child td:first-child {{
-            text-align: right; /* Align TOTAL label */
+            text-align: right;
         }}
 
         /* DataTables controls styling */
         .dataTables_length, .dataTables_filter, .dataTables_info, .dataTables_paginate {{
             margin-top: 15px;
             margin-bottom: 10px;
-            padding: 0 5px; /* Add slight padding */
+            padding: 0 5px;
+            display: flex; /* Use flexbox for controls */
+            align-items: center;
+            flex-wrap: wrap; /* Allow wrapping on small screens */
         }}
+         .dataTables_filter {{
+            margin-left: auto; /* Push filter to the right */
+         }}
+         .dataTables_info {{
+             margin-right: auto; /* Push info to the left of pagination */
+         }}
+
         .dataTables_filter input {{
             margin-left: 5px;
-            padding: 6px; /* Smaller search box */
+            padding: 6px;
             border-radius: 3px;
             border: 1px solid #ccc;
+            font-size: 14px;
         }}
         .dataTables_length select {{
              padding: 6px;
              border-radius: 3px;
              border: 1px solid #ccc;
              margin: 0 5px;
-             width: auto; /* Don't force select full width */
+             width: auto;
+             font-size: 14px;
         }}
          .dataTables_paginate .paginate_button {{
             padding: 5px 10px;
@@ -698,21 +787,42 @@ HTML_TEMPLATE = """
             background: #fff;
             color: #337ab7;
             text-decoration: none;
+            transition: background-color 0.2s, color 0.2s;
         }}
         .dataTables_paginate .paginate_button.current,
-        .dataTables_paginate .paginate_button:hover {{
+        .dataTables_paginate .paginate_button:hover:not(.disabled) {{ /* Exclude disabled from hover */
             background: #337ab7;
-            color: #fff !important;
+            color: #fff !important; /* Use !important if necessary to override */
             border: 1px solid #337ab7;
         }}
-        .dataTables_paginate .paginate_button.disabled,
-        .dataTables_paginate .paginate_button.disabled:hover {{
+        .dataTables_paginate .paginate_button.disabled {{
             background: #eee;
             color: #aaa !important;
             border: 1px solid #ddd;
-            cursor: default;
+            cursor: not-allowed;
         }}
-         /* --- End Embedded CSS --- */
+         /* Add padding/margin around DataTables buttons */
+         .dt-buttons {{
+             margin-bottom: 10px;
+             margin-left: 5px; /* Align buttons better */
+         }}
+        .dt-buttons .dt-button {{
+             padding: 6px 12px; /* Adjust button padding */
+             margin-right: 5px;
+             border-radius: 4px;
+             background-color: #6c757d; /* Bootstrap secondary button color */
+             color: white;
+             border: none;
+             cursor: pointer;
+             font-size: 13px;
+             transition: background-color 0.2s;
+         }}
+         .dt-buttons .dt-button:hover {{
+             background-color: #5a6268;
+         }}
+
+
+        /* --- End Embedded CSS --- */
     </style>
 </head>
 <body>
@@ -722,21 +832,25 @@ HTML_TEMPLATE = """
         <form id="pricing-form">
             <div class="form-row">
                 <div class="form-group">
-                    <label for="cloud">OpenStack Cloud:</label>
+                    <label for="cloud">OpenStack Cloud Name:</label>
                     <input type="text" id="cloud" name="cloud" placeholder="e.g., my-cloud-config" required>
+                     <small>Matches a section name in your clouds.yaml file.</small>
                 </div>
                 <div class="form-group">
                     <label for="project">Project Name or ID:</label>
-                    <input type="text" id="project" name="project" placeholder="Leave blank if using 'All Projects'">
+                    <input type="text" id="project" name="project" placeholder="Leave blank if processing all projects">
+                     <small>The name or ID of the OpenStack project.</small>
                 </div>
                  <div class="form-group checkbox-group">
                     <input type="checkbox" id="all_projects" name="all_projects">
                     <label for="all_projects">Process All Projects</label>
+                    <small>Overrides Project Name/ID if checked.</small>
                 </div>
             </div>
             <div class="form-group">
-                <label for="aws_csv">AWS Pricing CSV (EC2):</label>
+                <label for="aws_csv">AWS Pricing CSV (EC2 - us-east-1):</label>
                 <input type="file" id="aws_csv" name="aws_csv" accept=".csv" required>
+                 <small>Download from AWS (e.g., Public Pricing page for EC2, US East (N. Virginia)).</small>
             </div>
             <button type="submit" id="submit-button">Calculate Costs</button>
         </form>
@@ -750,6 +864,7 @@ HTML_TEMPLATE = """
 
         <div id="results">
             <h2>Results</h2>
+            <!-- DataTables will render here -->
             <table id="results-table" class="display compact" style="width:100%">
                 <thead>
                     <tr>
@@ -760,36 +875,34 @@ HTML_TEMPLATE = """
                         <th class="dt-right">RAM (GiB)</th>
                         <th class="dt-right">Disk (GB)</th>
                         <th>AWS Type</th>
-                        <th class="dt-right">OnDemand Hourly</th>
-                        <th class="dt-right">RI 3yr Hourly</th>
-                        <th class="dt-right">OnDemand Monthly</th>
-                        <th class="dt-right">OnDemand Yearly</th>
-                        <th class="dt-right">RI 3yr Monthly</th>
-                        <th class="dt-right">RI 3yr Yearly</th>
+                        <th class="dt-right">OnDemand Hourly ($)</th>
+                        <th class="dt-right">RI 3yr Hourly ($)</th>
+                        <th class="dt-right">OnDemand Monthly ($)</th>
+                        <th class="dt-right">OnDemand Yearly ($)</th>
+                        <th class="dt-right">RI 3yr Monthly ($)</th>
+                        <th class="dt-right">RI 3yr Yearly ($)</th>
                     </tr>
                 </thead>
                 <tbody>
                     <!-- DataTables populates this -->
                 </tbody>
-                 <!-- Optional: Footer for column search or totals -->
-                 <!--
+                 <!-- Using tfoot can help with column filtering or summation if needed -->
                  <tfoot>
                      <tr>
                          <th>Project</th>
                          <th>Server</th>
                          <th>vCPU</th>
-                         <th>RAM_GiB</th>
-                         <th>Disk_GB</th>
-                         <th>AWS_Type</th>
-                         <th>OnDemand_Hourly</th>
-                         <th>RI3yr_Hourly</th>
-                         <th>OnDemand_Monthly</th>
-                         <th>OnDemand_Yearly</th>
-                         <th>RI3yr_Monthly</th>
-                         <th>RI3yr_Yearly</th>
+                         <th>RAM (GiB)</th>
+                         <th>Disk (GB)</th>
+                         <th>AWS Type</th>
+                         <th>OnDemand Hourly ($)</th>
+                         <th>RI 3yr Hourly ($)</th>
+                         <th>OnDemand Monthly ($)</th>
+                         <th>OnDemand Yearly ($)</th>
+                         <th>RI 3yr Monthly ($)</th>
+                         <th>RI 3yr Yearly ($)</th>
                     </tr>
                  </tfoot>
-                 -->
             </table>
         </div>
     </div>
@@ -798,15 +911,13 @@ HTML_TEMPLATE = """
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <!-- Optional: DataTables Buttons extension (for CSV export etc.) -->
-    <!--
     <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/pdfmake.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/vfs_fonts.js"></script>
     <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
     <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
-    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
-    -->
+
 
     <script>
         // --- Embedded JavaScript ---
@@ -832,9 +943,6 @@ HTML_TEMPLATE = """
             }
 
             // Define columns for DataTables (must match keys in JSON from backend)
-            // 'title' is optional if the th text in HTML is sufficient.
-            // 'className' is used for styling (like text alignment).
-            // 'render' is used for formatting data display.
             const tableColumns = [
                 { data: 'Project', title: 'Project' },
                 { data: 'Server', title: 'Server' },
@@ -843,38 +951,38 @@ HTML_TEMPLATE = """
                 { data: 'Disk_GB', title: 'Disk (GB)', className: 'dt-right' },
                 { data: 'AWS_Type', title: 'AWS Type' },
                 {
-                    data: 'OnDemand_Hourly', title: 'OnDemand Hourly', className: 'dt-right',
+                    data: 'OnDemand_Hourly', title: 'OnDemand Hourly ($)', className: 'dt-right',
                     render: function(data, type, row) {
-                        // Use 6 decimal places for hourly rates if needed, or keep 4
-                        return type === 'display' ? formatNumber(data, 6) : data;
+                        // 'display' type is for rendering, others (filter, sort) use raw data
+                        return type === 'display' ? formatNumber(data, 6) : data; // 6 decimals for hourly
                     }
                 },
                 {
-                    data: 'RI3yr_Hourly', title: 'RI 3yr Hourly', className: 'dt-right',
+                    data: 'RI3yr_Hourly', title: 'RI 3yr Hourly ($)', className: 'dt-right',
                      render: function(data, type, row) {
                         return type === 'display' ? formatNumber(data, 6) : data;
                     }
                 },
                 {
-                    data: 'OnDemand_Monthly', title: 'OnDemand Monthly', className: 'dt-right',
+                    data: 'OnDemand_Monthly', title: 'OnDemand Monthly ($)', className: 'dt-right',
                     render: function(data, type, row) {
                          return type === 'display' ? formatNumber(data, 2) : data; // 2 decimals for monthly/yearly
                     }
                 },
                 {
-                    data: 'OnDemand_Yearly', title: 'OnDemand Yearly', className: 'dt-right',
+                    data: 'OnDemand_Yearly', title: 'OnDemand Yearly ($)', className: 'dt-right',
                     render: function(data, type, row) {
                         return type === 'display' ? formatNumber(data, 2) : data;
                     }
                 },
                 {
-                    data: 'RI3yr_Monthly', title: 'RI 3yr Monthly', className: 'dt-right',
+                    data: 'RI3yr_Monthly', title: 'RI 3yr Monthly ($)', className: 'dt-right',
                     render: function(data, type, row) {
                         return type === 'display' ? formatNumber(data, 2) : data;
                     }
                 },
                 {
-                    data: 'RI3yr_Yearly', title: 'RI 3yr Yearly', className: 'dt-right',
+                    data: 'RI3yr_Yearly', title: 'RI 3yr Yearly ($)', className: 'dt-right',
                     render: function(data, type, row) {
                         return type === 'display' ? formatNumber(data, 2) : data;
                     }
@@ -886,6 +994,7 @@ HTML_TEMPLATE = """
                 if (dataTableInstance) {
                     dataTableInstance.destroy(); // Destroy previous instance if exists
                     $('#results-table tbody').empty(); // Clear the table body manually
+                    $('#results-table tfoot').empty(); // Clear footer as well if using DataTables footers
                 }
                 dataTableInstance = $('#results-table').DataTable({
                     columns: tableColumns,
@@ -894,22 +1003,51 @@ HTML_TEMPLATE = """
                     lengthMenu: [ [10, 25, 50, 100, -1], [10, 25, 50, 100, "All"] ],
                     order: [], // Initial no sorting
                     scrollX: true, // Enable horizontal scrolling
-                    language: {{ // Customize text if needed
+                    language: { // Customize text if needed - THIS WAS THE FIX
                         "emptyTable": "No data available in table",
                         "zeroRecords": "No matching records found",
                         "info": "Showing _START_ to _END_ of _TOTAL_ entries",
                         "infoEmpty": "Showing 0 entries",
                         "infoFiltered": "(filtered from _MAX_ total entries)"
-                    }},
-                    // Optional: Add Buttons for export
-                    // dom: 'Bfrtip', // Needed for Buttons
-                    // buttons: [
-                    //     'copyHtml5',
-                    //     'excelHtml5',
-                    //     'csvHtml5',
-                    //     'pdfHtml5'
-                    // ]
+                        // "loadingRecords": "Loading...", // Optional
+                        // "processing": "Processing..." // Optional
+                    },
+                     dom: 'lBfrtip', // Layout: length, Buttons, filtering, table, info, pagination
+                     buttons: [
+                         { extend: 'copyHtml5', text: 'Copy' },
+                         { extend: 'excelHtml5', text: 'Excel' },
+                         { extend: 'csvHtml5', text: 'CSV' },
+                         { extend: 'pdfHtml5', text: 'PDF' }
+                     ],
+                    // footerCallback: function ( row, data, start, end, display ) {
+                    //     // Example: You could sum columns here if Python didn't provide a total row
+                    //     // var api = this.api();
+                    //     // $( api.column( 6 ).footer() ).html(
+                    //     //     api.column( 6, { page: 'current'} ).data().sum() // Sum only current page
+                    //     // );
+                    // }
                 });
+
+                // Optional: Add column filters in the footer
+                // $('#results-table tfoot th').each( function () {
+                //     var title = $(this).text();
+                //     if (title !== 'Project' && title !== 'Server' && !title.includes('$')) { // Add filters except for specific columns
+                //         $(this).html( '<input type="text" placeholder="Filter '+title+'" />' );
+                //     }
+                // } );
+
+                // // Apply the search
+                // dataTableInstance.columns().every( function () {
+                //     var that = this;
+                //     $( 'input', this.footer() ).on( 'keyup change clear', function () {
+                //         if ( that.search() !== this.value ) {
+                //             that
+                //                 .search( this.value )
+                //                 .draw();
+                //         }
+                //     } );
+                // } );
+
             }
 
             // Initialize the DataTable structure on page load
@@ -926,10 +1064,10 @@ HTML_TEMPLATE = """
                 const $errorMessage = $('#error-message');
                 const $resultsSection = $('#results');
 
-                // Client-side validation (enhanced)
+                // Client-side validation
                 const cloud = formData.get('cloud').trim();
                 const project = formData.get('project').trim();
-                const allProjects = $('#all_projects').is(':checked'); // Use jQuery's is(':checked')
+                const allProjects = $('#all_projects').is(':checked');
                 const fileInput = $('#aws_csv')[0];
                 const file = fileInput.files.length > 0 ? fileInput.files[0] : null;
 
@@ -947,9 +1085,10 @@ HTML_TEMPLATE = """
                     $errorMessage.text('Error: Please select an AWS Pricing CSV file.').show();
                     return;
                 }
-                 if (file.type && file.type !== "text/csv" && !file.name.toLowerCase().endsWith('.csv')) {
-                    $errorMessage.text('Error: Invalid file type. Please upload a CSV file.').show();
-                    return;
+                 // Basic file extension check (more robust check happens server-side)
+                 if (!file.name.toLowerCase().endsWith('.csv')) {
+                     $errorMessage.text('Error: Invalid file type. Please upload a CSV file ending in .csv').show();
+                     return;
                  }
                  // Optional: Check file size (matches Flask config)
                  if (file.size > 16 * 1024 * 1024) {
@@ -967,12 +1106,13 @@ HTML_TEMPLATE = """
                 if (dataTableInstance) {
                     dataTableInstance.clear().draw();
                 } else {
-                    initializeDataTable(); // Ensure it's initialized if first run failed maybe
+                    // Should already be initialized, but good safeguard
+                    initializeDataTable();
                 }
 
                 // Make AJAX request to Flask backend
                 $.ajax({
-                    url: '/api/calculate', // Ensure this matches your Flask route
+                    url: '/api/calculate',
                     type: 'POST',
                     data: formData,
                     processData: false, // Important: prevent jQuery from processing FormData
@@ -986,15 +1126,23 @@ HTML_TEMPLATE = """
                             console.log("Data received:", response.data.length, "rows");
                             if (dataTableInstance) {
                                 dataTableInstance.rows.add(response.data); // Add new data
-                                dataTableInstance.columns.adjust().draw(); // Adjust columns and redraw
+                                dataTableInstance.columns.adjust().draw(); // Adjust column widths and redraw
                                 $resultsSection.show(); // Show the results section
+
+                                // Check if any server data was returned (excluding the TOTAL row)
+                                const serverRows = response.data.filter(row => row.Server !== 'TOTAL');
+                                if (serverRows.length === 0) {
+                                    // If only the TOTAL row (or empty), display a message
+                                    $errorMessage.text('Info: No OpenStack servers found matching the criteria.').show();
+                                     $('#results-table').hide(); // Hide the table if no data
+                                } else {
+                                    $('#results-table').show(); // Ensure table is visible if there's data
+                                }
+
+
                             } else {
                                 console.error("DataTable instance is not available.");
                                 $errorMessage.text('Error: Could not display results table.').show();
-                            }
-                             if (response.data.length === 0 || (response.data.length === 1 && response.data[0].Server === 'TOTAL')) {
-                                console.log("Response contains no server data (or only TOTAL row).");
-                                // Optionally show a specific message if only TOTAL row exists or it's empty
                             }
                         } else if (response.error) {
                              console.error("Backend Error:", response.error);
@@ -1015,11 +1163,26 @@ HTML_TEMPLATE = """
                         } else if (jqXHR.status === 413) {
                             errorMsg = 'Error: The uploaded file is too large (max 16MB).';
                         } else if (jqXHR.responseText) {
-                            // Avoid displaying full HTML error pages; show concise info
-                            if (jqXHR.responseText.length < 500 && !jqXHR.responseText.trim().startsWith('<')) {
-                                errorMsg = `Server Error (${jqXHR.status}): ${jqXHR.responseText}`;
-                            } else {
-                                 errorMsg = `Server Error: ${jqXHR.status} ${errorThrown}. Check server logs for details.`;
+                            // Attempt to parse JSON even if status code isn't standard success
+                            try {
+                                const jsonResponse = JSON.parse(jqXHR.responseText);
+                                if (jsonResponse.error) {
+                                    errorMsg = jsonResponse.error;
+                                } else {
+                                     // Fallback to text if JSON wasn't expected format
+                                    if (jqXHR.responseText.length < 500 && !jqXHR.responseText.trim().startsWith('<')) {
+                                        errorMsg = `Server Error (${jqXHR.status}): ${jqXHR.responseText}`;
+                                    } else {
+                                         errorMsg = `Server Error: ${jqXHR.status} ${errorThrown}. Check server logs for details.`;
+                                    }
+                                }
+                            } catch (e) {
+                                // If responseText isn't JSON or is too long/looks like HTML
+                                if (jqXHR.responseText.length < 500 && !jqXHR.responseText.trim().startsWith('<')) {
+                                        errorMsg = `Server Error (${jqXHR.status}): ${jqXHR.responseText}`;
+                                } else {
+                                     errorMsg = `Server Error: ${jqXHR.status} ${errorThrown}. Check server logs for details.`;
+                                }
                             }
                         } else {
                             errorMsg = `Network Error: ${textStatus} - ${errorThrown}`;
@@ -1053,6 +1216,7 @@ HTML_TEMPLATE = """
 @app.route('/')
 def index():
     """Serves the main page with embedded HTML, CSS, and JS."""
+    # No need for a return statement here, render_template_string handles it
     return render_template_string(HTML_TEMPLATE)
 
 @app.route('/favicon.ico')
@@ -1071,7 +1235,7 @@ def calculate_costs():
     if file.filename == '':
         return jsonify({"error": "No selected file."}), 400
     if not file or not _allowed_file(file.filename):
-        return jsonify({"error": "Invalid file type. Please upload a CSV file."}), 400
+        return jsonify({"error": f"Invalid file type for '{file.filename}'. Please upload a CSV file."}), 400
 
     cloud_name = request.form.get('cloud', '').strip()
     project_name = request.form.get('project', '').strip() # Might be empty
@@ -1100,8 +1264,13 @@ def calculate_costs():
         logging.info(f"Attempting connection to cloud: {cloud_name}")
         conn = connection.from_config(cloud=cloud_name)
         # Minimal check to verify connection works
-        conn.identity.get_user('self')
-        logging.info(f"Successfully connected to OpenStack cloud: {cloud_name}")
+        try:
+             conn.identity.get_user('self')
+             logging.info(f"Successfully connected to OpenStack cloud: {cloud_name}")
+        except Exception as e:
+             # Catch exceptions during the get_user call specifically
+             logging.error(f"Authentication/Initial connection check failed for cloud '{cloud_name}': {e}")
+             raise OpenStackCloudException(f"Authentication or initial connection check failed for cloud '{cloud_name}'. Check credentials and configuration.", e)
 
         # Resolve Project ID if a specific project was requested
         if not use_all_projects and project_name:
@@ -1109,12 +1278,15 @@ def calculate_costs():
             try:
                 # find_project tries name first, then ID if name fails
                 pr = conn.identity.find_project(project_name, ignore_missing=False) # Fail if not found
+                if not pr: # find_project with ignore_missing=False should raise, but check explicitly
+                     raise ResourceNotFound(f"Project '{project_name}' not found.")
                 project_id_to_use = pr.id
                 logging.info(f"Found project '{pr.name}' with ID: {project_id_to_use}")
+            except ResourceNotFound:
+                 return jsonify({"error": f"OpenStack project '{project_name}' not found or inaccessible. Verify name/ID and permissions."}), 404 # 404 Not Found
             except OpenStackCloudException as e:
                 logging.error(f"Failed to find project '{project_name}': {e}")
-                # Distinguish between "not found" and other errors if possible from exception details
-                return jsonify({"error": f"OpenStack project '{project_name}' not found or inaccessible. Verify name/ID and permissions."}), 404 # 404 Not Found
+                return jsonify({"error": f"Error finding OpenStack project '{project_name}'. Details: {e}"}), 500
             except Exception as e_find: # Catch broader errors during find
                  logging.error(f"Unexpected error resolving project '{project_name}': {e_find}")
                  return jsonify({"error": f"Unexpected error resolving project '{project_name}'. Details: {e_find}"}), 500
@@ -1130,12 +1302,13 @@ def calculate_costs():
 
     # --- Perform Calculation ---
     try:
+        # Reset the stream position to the beginning before passing it
+        file.stream.seek(0)
         # Pass the file stream directly (file.stream is io.BytesIO)
         report_df = build_report(conn, project_id_to_use, file.stream)
 
         # Convert DataFrame to JSON suitable for DataTables (list of objects)
-        # Handle NaN/None -> None (null in JSON) for better JS handling if needed
-        # If NaNs should be strings like 'N/A', use fillna('N/A')
+        # Handle NaN/None -> None (null in JSON) for better JS handling
         report_df_clean = report_df.where(pd.notnull(report_df), None)
 
         json_data = report_df_clean.to_dict(orient='records')
@@ -1152,11 +1325,23 @@ def calculate_costs():
          # Catch any other unexpected errors during the main process
          logging.error(f"An unexpected error occurred during calculation: {e}\n{traceback.format_exc()}")
          return jsonify({"error": "An internal server error occurred during calculation."}), 500
-    # --- End Calculation ---
+    finally:
+        # Although SDK might handle cleanup, ensure connection is closed if possible
+        if 'conn' in locals() and conn is not None:
+            try:
+                # Depending on SDK version/config, close might be needed
+                # If conn doesn't have a close method or it causes issues, remove this
+                if hasattr(conn, 'close'):
+                    conn.close()
+                    logging.debug("OpenStack connection closed.")
+            except Exception:
+                logging.warning("Exception occurred while trying to close OpenStack connection.")
 
 # --- Main Execution ---
 if __name__ == '__main__':
     # Set host='0.0.0.0' to be accessible on the network
     # Use debug=False for production/sharing
     # Choose a port (e.g., 5001 or another free port)
+    # The WARNING about the development server will still appear in debug=False,
+    # but it's a standard Flask message for this basic run method.
     app.run(host='0.0.0.0', port=5001, debug=False)

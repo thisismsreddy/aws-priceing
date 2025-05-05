@@ -147,7 +147,7 @@ def build_report(conn, project_id: Optional[str], aws_prices_csv: Path):
     rows: List[Dict[str, object]] = []
     missing_map: Set[Tuple[int, int]] = set()
 
-    srv_iter = list(conn.compute.servers(details=True, all_projects=project_id is None))
+    srv_iter = list(conn.compute.servers(details=True, all_projects=True)))
 
     with tqdm(total=len(srv_iter), desc="Fetching VMs", unit="vm") as bar:
         for srv in srv_iter:
@@ -202,7 +202,13 @@ def main():
 
     conn = connection.from_config(cloud=args.cloud)
 
-    rows, missing = build_report(conn, None if args.all_projects else args.project, args.aws_csv)
+    # Resolve project name → ID (or accept ID directly)
+    proj_id: Optional[str] = None
+    if not args.all_projects:
+        proj = conn.identity.find_project(args.project, ignore_missing=True)
+        proj_id = proj.id if proj else args.project  # if not found, assume raw UUID
+
+    rows, missing = build_report(conn, proj_id, args.aws_csv)
 
     if missing:
         print("[WARN] No AWS match for VM shapes:", sorted(missing), file=sys.stderr)
@@ -216,6 +222,9 @@ def main():
 
 if __name__ == "__main__":
     try:
+        main()
+    except KeyboardInterrupt:
+        sys.exit(130)
         main()
     except KeyboardInterrupt:
         sys.exit(130)

@@ -12,18 +12,17 @@ A single‑file CLI utility that:
 Dependencies:
   pip install openstacksdk pandas tqdm tabulate
 
-Usage examples:
-  python openstack_aws_pricing_tool.py --cloud mycloud --project demo \
-         --aws-csv ./prices/AmazonEC2-pricing-20250504.csv
-  python openstack_aws_pricing_tool.py --cloud mycloud --all-projects \
-         --aws-csv ./prices/latest.csv --output report.csv
+Tested with Python ≥3.8 (uses PEP‑585 generics but **not** the `|` union operator so it runs on 3.8/3.9).
 """
+
+from __future__ import annotations  # allow list[int] generics on 3.8
 
 import argparse
 import csv
 import sys
 from collections import defaultdict
 from pathlib import Path
+from typing import Optional, Dict, Tuple, List, Set
 
 import pandas as pd
 from openstack import connection
@@ -54,7 +53,7 @@ def _load_aws_prices(csv_path: Path):
         & (df["Operating System"].fillna("Linux") == "Linux")
     ]
 
-    on_demand = (
+    on_demand: Dict[str, float] = (
         df[df["TermType"] == "OnDemand"]
         .groupby("Instance Type")["PricePerUnit"]
         .min()
@@ -67,7 +66,7 @@ def _load_aws_prices(csv_path: Path):
         & (df["LeaseContractLength"] == "3yr")
         & (df["PurchaseOption"] == "No Upfront")
     )
-    ri_3yr = (
+    ri_3yr: Dict[str, float] = (
         df[ri_filter]
         .groupby("Instance Type")["PricePerUnit"]
         .min()
@@ -82,11 +81,11 @@ def _load_aws_prices(csv_path: Path):
 # OpenStack → AWS mapping logic (very naive vCPU/RAM fit)
 # ────────────────────────────────────────────────────────────────────────────────
 
-def _choose_instance(vcpus: int, ram_mb: int, aws_od: dict):
+def _choose_instance(vcpus: int, ram_mb: int, aws_od: Dict[str, float]):
     """Return the cheapest instance type that fits vCPU & RAM (GiB)."""
     ram_gib = (ram_mb + 1023) // 1024  # round‑up MiB → GiB
 
-    candidates = [
+    candidates: List[Tuple[str, float]] = [
         (itype, price)
         for itype, price in aws_od.items()
         if _AWS_SPECS.get(itype, (None, None))[0] >= vcpus
@@ -101,7 +100,7 @@ def _choose_instance(vcpus: int, ram_mb: int, aws_od: dict):
 
 # NOTE: A tiny subset to keep the script self‑contained.
 # In production, load this from the same CSV (Instance Type, vCPU, Memory) once.
-_AWS_SPECS = {
+_AWS_SPECS: Dict[str, Tuple[int, int]] = {
     "t3.micro": (2, 1),
     "t3.small": (2, 2),
     "t3.medium": (2, 4),
@@ -124,14 +123,13 @@ _AWS_SPECS = {
 # Main inventory / cost routine
 # ────────────────────────────────────────────────────────────────────────────────
 
-def build_report(conn, project_id: str | None, aws_prices_csv: Path):
+def build_report(conn, project_id: Optional[str], aws_prices_csv: Path):
     aws_od, aws_ri = _load_aws_prices(aws_prices_csv)
 
-    rows = []
-    missing_map = set()
+    rows: List[Dict[str, object]] = []
+    missing_map: Set[Tuple[int, int]] = set()
 
-    srv_iter = conn.compute.servers(details=True, all_projects=project_id is None)
-    srv_iter = list(srv_iter)  # materialise once for length
+    srv_iter = list(conn.compute.servers(details=True, all_projects=project_id is None))
 
     with tqdm(total=len(srv_iter), desc="Fetching VMs", unit="vm") as bar:
         for srv in srv_iter:
@@ -149,7 +147,7 @@ def build_report(conn, project_id: str | None, aws_prices_csv: Path):
                 total_disk += vol.size
 
             itype, od_price = _choose_instance(vcpus, ram, aws_od)
-            ri_price = aws_ri.get(itype)
+            ri_price = aws_ri.get(itype) if itype else None
             if not itype:
                 missing_map.add((vcpus, ram))
 

@@ -27,14 +27,20 @@ from tabulate import tabulate
 # AWS price loading (same as before, header‑skip intact)
 # ────────────────────────────────────────────────────────────────────────────────
 
-def _load_aws_prices(csv_path: Path):
+def def _load_aws_prices(csv_path: Path):
+    """Parse the AWS price CSV and return two dicts: {itype: price/hr}.
+
+    * Filters to us‑east‑1, shared tenancy, Linux, USD, Hrs.
+    * Drops rows where PricePerUnit is missing or zero (some Reserved rows list
+      an hourly price of 0.0 because the cost is baked into an upfront fee).
+    """
     with csv_path.open("r", newline="") as f:
         for idx, line in enumerate(f):
             if line.lstrip().startswith("SKU") or line.lstrip().startswith("\"SKU\""):
                 header = idx
                 break
         else:
-            raise ValueError("Could not locate CSV header in price file")
+            raise ValueError("CSV header not found (no line starting with 'SKU')")
 
     df = pd.read_csv(csv_path, skiprows=header, quotechar='"', dtype=str)
     df.columns = df.columns.str.strip()
@@ -42,17 +48,29 @@ def _load_aws_prices(csv_path: Path):
 
     base = df[
         (df["Region Code"] == "us-east-1")
-        & (df["Unit"] == "Hrs") & (df["Currency"] == "USD")
+        & (df["Unit"] == "Hrs")
+        & (df["Currency"] == "USD")
         & (df["Tenancy"].fillna("Shared") == "Shared")
         & (df["Operating System"].fillna("Linux") == "Linux")
+        & (df["PricePerUnit"].notna())
+        & (df["PricePerUnit"] > 0)
     ]
 
-    on_demand = (base[base["TermType"] == "OnDemand"]
-                 .groupby("Instance Type")["PricePerUnit"].min().to_dict())
-    ri_3yr = (base[(base["TermType"] == "Reserved")
-                   & (base["LeaseContractLength"] == "3yr")
-                   & (base["PurchaseOption"] == "No Upfront")]
-              .groupby("Instance Type")["PricePerUnit"].min().to_dict())
+    on_demand = (
+        base[base["TermType"] == "OnDemand"]
+        .groupby("Instance Type")["PricePerUnit"]
+        .min()
+        .to_dict()
+    )
+
+    ri_3yr = (
+        base[(base["TermType"] == "Reserved")
+              & (base["LeaseContractLength"] == "3yr")
+              & (base["PurchaseOption"] == "No Upfront")]
+        .groupby("Instance Type")["PricePerUnit"]
+        .min()
+        .to_dict()
+    )
     return on_demand, ri_3yr
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -73,10 +91,15 @@ _AWS_SPECS: Dict[str, Tuple[int, int]] = {
 
 
 def _choose_instance(vcpu: int, ram_mb: int, aws_od: Dict[str, float]):
+    """Select cheapest AWS instance that fits vCPU & RAM and has a valid price."""
     ram_gib = (ram_mb + 1023) // 1024
-    fits = [(itype, price) for itype, price in aws_od.items()
-            if _AWS_SPECS.get(itype, (0, 0))[0] >= vcpu
-            and _AWS_SPECS.get(itype, (0, 0))[1] >= ram_gib]
+    fits = [
+        (itype, price)
+        for itype, price in aws_od.items()
+        if price and price > 0
+        and _AWS_SPECS.get(itype, (0, 0))[0] >= vcpu
+        and _AWS_SPECS.get(itype, (0, 0))[1] >= ram_gib
+    ]
     return min(fits, key=lambda x: x[1]) if fits else (None, None)
 
 # ────────────────────────────────────────────────────────────────────────────────

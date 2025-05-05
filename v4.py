@@ -5,14 +5,12 @@ Web-based OpenStack → AWS pricing comparison
 """
 
 import re
-import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 from flask import Flask, request, render_template_string
 from openstack import connection
-from tqdm import tqdm
 
 # Constants
 HOURS_IN_MONTH = 730
@@ -102,7 +100,7 @@ def build_report(conn, project_id: Optional[str], csv_path: Path) -> pd.DataFram
     seen_vol: Dict[str, int] = {}
     rows: List[Dict[str, object]] = []
     servers = list(conn.compute.servers(details=True, all_projects=True))
-    for srv in tqdm(servers, desc='Processing VMs'):
+    for srv in servers:
         if project_id and srv.project_id != project_id:
             continue
         f_ref = srv.flavor.get('id') or srv.flavor.get('original_name')
@@ -125,14 +123,18 @@ def build_report(conn, project_id: Optional[str], csv_path: Path) -> pd.DataFram
             'RAM_GiB': (ram_mb + 1023)//1024,
             'Disk_GB': disk,
             'AWS_Type': itype or 'N/A',
-            'OnDemand_Hourly': (None if od_hr is None else od_hr + storage_hr),
-            'RI3yr_Hourly': (None if ri_hr is None else ri_hr + storage_hr),
+            'OnDemand_Hourly': None if od_hr is None else od_hr + storage_hr,
+            'RI3yr_Hourly': None if ri_hr is None else ri_hr + storage_hr,
         })
     df = pd.DataFrame(rows)
-    for c in ['OnDemand_Hourly', 'RI3yr_Hourly']:
-        df[c.replace('Hourly','Monthly')] = df[c] * HOURS_IN_MONTH
-        df[c.replace('Hourly','Yearly')]  = df[c] * HOURS_IN_YEAR
-    total = {c: df[c].sum() if df[c].dtype.kind=='f' else ('TOTAL' if c=='Server' else '') for c in df.columns}
+    # compute monthly/yearly only if hourly columns exist
+    if 'OnDemand_Hourly' in df.columns:
+        df['OnDemand_Monthly'] = df['OnDemand_Hourly'] * HOURS_IN_MONTH
+        df['OnDemand_Yearly'] = df['OnDemand_Hourly'] * HOURS_IN_YEAR
+    if 'RI3yr_Hourly' in df.columns:
+        df['RI3yr_Monthly'] = df['RI3yr_Hourly'] * HOURS_IN_MONTH
+        df['RI3yr_Yearly'] = df['RI3yr_Hourly'] * HOURS_IN_YEAR
+    total = {c: df[c].sum() if df[c].dtype.kind == 'f' else ('TOTAL' if c == 'Server' else '') for c in df.columns}
     return pd.concat([df, pd.DataFrame([total])], ignore_index=True)
 
 # --- Flask web app ---

@@ -19,6 +19,7 @@ HOURS_IN_MONTH = 730
 HOURS_IN_YEAR = 8_760
 _SPACE_RE = re.compile(r"\s+")
 CSV_PATH = Path('/path/to/aws_price_list.csv')  # <-- set your CSV path here
+DEFAULT_CLOUD = 'openstack'  # default cloud name from clouds.yaml
 
 # --- CSV helpers ---
 def _load_csv(path: Path) -> pd.DataFrame:
@@ -149,6 +150,10 @@ FORM_HTML = '''<!doctype html>
   <div class="container">
     <h1>AWS Pricing Comparison</h1>
     <form method="post">
+      <div class="mb-3">
+        <label for="cloud" class="form-label">Cloud Name</label>
+        <input type="text" class="form-control" id="cloud" name="cloud" value="{{ default_cloud }}" required>
+      </div>
       <div class="mb-3 form-check">
         <input type="checkbox" class="form-check-input" id="all_projects" name="all_projects">
         <label class="form-check-label" for="all_projects">All Projects</label>
@@ -183,12 +188,13 @@ RESULT_HTML = '''<!doctype html>
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
+        cloud = request.form.get('cloud', DEFAULT_CLOUD)
         proj = None if request.form.get('all_projects') else request.form.get('project')
-        conn = connection.from_config(cloud='openstack')
+        conn = connection.from_config(cloud=cloud)
         df = build_report(conn, proj, CSV_PATH)
         table = df.to_html(classes='table table-striped table-bordered', index=False, float_format='{:,.4f}'.format)
         return render_template_string(RESULT_HTML, table=table)
-    return render_template_string(FORM_HTML)
+    return render_template_string(FORM_HTML, default_cloud=DEFAULT_CLOUD)
 
 if __name__ == '__main__':
     app.run(debug=True)

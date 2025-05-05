@@ -1,27 +1,22 @@
 (env) ➜  ~ python aws-priceing/openstack_aws_pricing_tool.py --cloud dc1-cdl-osp4 --project osp-c1npgt04-Infr-Arch --aws-csv aws-priceing/AmazonEC2-pricing-20250505.csv
-Traceback (most recent call last):
-  File "aws-priceing/openstack_aws_pricing_tool.py", line 201, in <module>
-    main()
-  File "aws-priceing/openstack_aws_pricing_tool.py", line 187, in main
-    rows, missing = build_report(conn, None if args.all_projects else args.project, args.aws_csv)
-  File "aws-priceing/openstack_aws_pricing_tool.py", line 127, in build_report
-    aws_od, aws_ri = _load_aws_prices(aws_prices_csv)
-  File "aws-priceing/openstack_aws_pricing_tool.py", line 42, in _load_aws_prices
-    df = pd.read_csv(csv_path)
-  File "/home/srini/env/lib/python3.8/site-packages/pandas/util/_decorators.py", line 211, in wrapper
-    return func(*args, **kwargs)
-  File "/home/srini/env/lib/python3.8/site-packages/pandas/util/_decorators.py", line 331, in wrapper
-    return func(*args, **kwargs)
-  File "/home/srini/env/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 950, in read_csv
-    return _read(filepath_or_buffer, kwds)
-  File "/home/srini/env/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 611, in _read
-    return parser.read(nrows)
-  File "/home/srini/env/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 1778, in read
-    ) = self._engine.read(  # type: ignore[attr-defined]
-  File "/home/srini/env/lib/python3.8/site-packages/pandas/io/parsers/c_parser_wrapper.py", line 230, in read
-    chunks = self._reader.read_low_memory(nrows)
-  File "pandas/_libs/parsers.pyx", line 808, in pandas._libs.parsers.TextReader.read_low_memory
-  File "pandas/_libs/parsers.pyx", line 866, in pandas._libs.parsers.TextReader._read_rows
-  File "pandas/_libs/parsers.pyx", line 852, in pandas._libs.parsers.TextReader._tokenize_rows
-  File "pandas/_libs/parsers.pyx", line 1973, in pandas._libs.parsers.raise_parser_error
-pandas.errors.ParserError: Error tokenizing data. C error: Expected 2 fields in line 6, saw 91
+Fetching VMs: 0vm [00:00, ?vm/s]
+
+(env) ➜  ~ export OS_CLOUD=dc1-cdl-osp4
+(env) ➜  ~ openstack server list --project osp-c1npgt04-Infr-Arch
++--------------------------------------+----------------------------------+--------+------------------------------------------------------+------------------------------------+------------------------+
+| ID                                   | Name                             | Status | Networks                                             | Image                              | Flavor                 |
++--------------------------------------+----------------------------------+--------+------------------------------------------------------+------------------------------------+------------------------+
+| 9cfda5e5-b66e-4661-b41e-7e95b77aba35 | linuxtest                        | ACTIVE | EPG-DIT-GETS-OSP04APP1-APP-routed-net=10.240.255.148 | ADP_RHEL-Base_8_x86_2025-02-17_188 | gp.small               |
+| c29112fe-6502-4b17-8b0a-d04bc2e273c6 | CDLDTIACVDM0006                  | ACTIVE | EPG-DIT-GETS-OSP04APP1-APP-routed-net=10.240.255.151 | N/A (booted from volume)           | osp-win-large-8x16x150 |
+| 40e43069-959d-4edc-ab46-d1c6000429dc | CDLDTIACVDM0007                  | ACTIVE | EPG-DIT-GETS-OSP04APP1-APP-routed-net=10.240.255.156 | N/A (booted from volume)           | osp-win-large-8x16x100 |
+| d539d501-3afd-4248-bb4c-c44944a79214 | DC1CDL4-operatiosn-t_cloud_agent | ACTIVE | EPG-DIT-GETS-OSP04APP1-APP-routed-net=10.240.255.146 | N/A (booted from volume)           | osp-2xsmall-2x4x40     |
+| 104a3fd8-4a2e-4a1a-ad9b-1037b88521b7 | CDLDTXASVPF0004                  | ACTIVE | EPG-DIT-GETS-OSP04APP1-APP-routed-net=10.241.255.157 | N/A (booted from volume)           | gp.medium              |
+| 25c4b04d-8886-4ef5-b281-1f5b6252c58b | DC1CDL-infra-arch-AZ_cloud_agent | ACTIVE | EPG-DIT-GETS-OSP04APP1-APP-routed-net=10.241.255.146 | N/A (booted from volume)           | osp-2xsmall-2x4x40     |
+| 99e00af6-18f6-45f3-a3b5-365f80ecd03f | CDLVDIVRO1514                    | ACTIVE | EPG-DIT-GETS-OSP04APP1-APP-routed-net=10.241.255.156 | N/A (booted from volume)           | gp.medium              |
+| 8fac2e71-f9ae-405a-b97c-b6736445234f | kishan-windows                   | ACTIVE | EPG-DIT-GETS-OSP04APP1-APP-routed-net=10.240.255.153 | Wind11-Image                       | osp-medium-4x16x500    |
+| f1f01c18-39fc-4a8b-a1eb-2eec0baf8c1f | CDLVDIVROWA0359                  | ACTIVE | EPG-DIT-GETS-OSP04APP1-APP-routed-net=10.241.255.155 | N/A (booted from volume)           | gp.medium              |
+| b660c43d-c7a9-42a3-abd5-3a2954fce912 | infra-dc1cdl4-AZ2_cloud_agent    | ACTIVE | EPG-DIT-GETS-OSP04APP1-APP-routed-net=10.241.255.153 | N/A (booted from volume)           | osp-2xsmall-2x4x40     |
+| da571fb2-9800-4c84-9300-7ed10319eddf | CDLVDIVROWA0665                  | ACTIVE | EPG-DIT-GETS-OSP04APP1-APP-routed-net=10.240.255.155 | N/A (booted from volume)           | gp.large               |
+| 89ef1310-330f-49c8-bcb4-d0829f740034 | infra-dc1cdl4_cloud_agent        | ACTIVE | EPG-DIT-GETS-OSP04APP1-APP-routed-net=10.240.255.154 | N/A (booted from volume)           | osp-2xsmall-2x4x40     |
++--------------------------------------+----------------------------------+--------+------------------------------------------------------+------------------------------------+------------------------+
+(env) ➜  ~                                                                 

@@ -1,16 +1,17 @@
 (env) ➜  ~ python aws-priceing/openstack_aws_pricing_tool.py --cloud dc1-cdl-osp4 --project osp-c1npgt04-Infr-Arch --aws-csv aws-priceing/AmazonEC2-pricing-20250505.csv
-Fetching VMs: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 417/417 [00:02<00:00, 139.20vm/s]
-|    | project                          | server                           |   vcpus |   ram_GiB |   disk_GB | aws_type    |   on_demand$/hr |   ri3yr$/hr |
-|----|----------------------------------|----------------------------------|---------|-----------|-----------|-------------|-----------------|-------------|
-|  0 | ae0c4b74bf2e495690dea21b2c7de16a | linuxtest                        |       2 |         2 |        50 | t3.small    |          0.0208 |      0.0090 |
-|  1 | ae0c4b74bf2e495690dea21b2c7de16a | CDLDTIACVDM0006                  |       8 |        16 |       365 | m6a.2xlarge |          0.3456 |      0.1568 |
-|  2 | ae0c4b74bf2e495690dea21b2c7de16a | CDLDTIACVDM0007                  |       8 |        16 |       271 | m6a.2xlarge |          0.3456 |      0.1568 |
-|  3 | ae0c4b74bf2e495690dea21b2c7de16a | DC1CDL4-operatiosn-t_cloud_agent |       2 |         4 |        50 | t3.medium   |          0.0416 |      0.0180 |
-|  4 | ae0c4b74bf2e495690dea21b2c7de16a | CDLDTXASVPF0004                  |       4 |         8 |       205 | t3.xlarge   |          0.1664 |      0.0719 |
-|  5 | ae0c4b74bf2e495690dea21b2c7de16a | DC1CDL-infra-arch-AZ_cloud_agent |       2 |         4 |        50 | t3.medium   |          0.0416 |      0.0180 |
-|  6 | ae0c4b74bf2e495690dea21b2c7de16a | CDLVDIVRO1514                    |       4 |         8 |       250 | t3.xlarge   |          0.1664 |      0.0719 |
-|  7 | ae0c4b74bf2e495690dea21b2c7de16a | kishan-windows                   |       4 |        16 |       500 | t3.xlarge   |          0.1664 |      0.0719 |
-|  8 | ae0c4b74bf2e495690dea21b2c7de16a | CDLVDIVROWA0359                  |       4 |         8 |       250 | t3.xlarge   |          0.1664 |      0.0719 |
-|  9 | ae0c4b74bf2e495690dea21b2c7de16a | infra-dc1cdl4-AZ2_cloud_agent    |       2 |         4 |        50 | t3.medium   |          0.0416 |      0.0180 |
-| 10 | ae0c4b74bf2e495690dea21b2c7de16a | CDLVDIVROWA0665                  |       8 |        16 |       350 | m6a.2xlarge |          0.3456 |      0.1568 |
-| 11 | ae0c4b74bf2e495690dea21b2c7de16a | infra-dc1cdl4_cloud_agent        |       2 |         4 |        50 | t3.medium   |          0.0416 |      0.0180 |
+Fetching VMs: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 417/417 [00:09<00:00, 43.10vm/s]
+|    | project                          | server                           |   vcpus |   ram_GiB |   disk_GB | aws_type    |   od$/hr |   ri3yr$/hr |    od$/mo |   ri3yr$/mo |     od$/yr |   ri3yr$/yr |
+|----|----------------------------------|----------------------------------|---------|-----------|-----------|-------------|----------|-------------|-----------|-------------|------------|-------------|
+|  0 | ae0c4b74bf2e495690dea21b2c7de16a | linuxtest                        |       2 |         2 |        50 | t3.small    |   0.0208 |      0.0090 |   15.1840 |      6.5700 |   182.2080 |     78.8400 |
+|  1 | ae0c4b74bf2e495690dea21b2c7de16a | CDLDTIACVDM0006                  |       8 |        16 |       365 | m6a.2xlarge |   0.3456 |      0.1568 |  252.2880 |    114.4348 |  3027.4560 |   1373.2176 |
+|  2 | ae0c4b74bf2e495690dea21b2c7de16a | CDLDTIACVDM0007                  |       8 |        16 |       271 | m6a.2xlarge |   0.3456 |      0.1568 |  252.2880 |    114.4348 |  3027.4560 |   1373.2176 |
+|  3 | ae0c4b74bf2e495690dea21b2c7de16a | DC1CDL4-operatiosn-t_cloud_agent |       2 |         4 |        50 | t3.medium   |   0.0416 |      0.0180 |   30.3680 |     13.1400 |   364.4160 |    157.6800 |
+|  4 | ae0c4b74bf2e495690dea21b2c7de16a | CDLDTXASVPF0004                  |       4 |         8 |       205 | t3.xlarge   |   0.1664 |      0.0719 |  121.4720 |     52.4870 |  1457.6640 |    629.8440 |
+|  5 | ae0c4b74bf2e495690dea21b2c7de16a | DC1CDL-infra-arch-AZ_cloud_agent |       2 |         4 |        50 | t3.medium   |   0.0416 |      0.0180 |   30.3680 |     13.1400 |   364.4160 |    157.6800 |
+|  6 | ae0c4b74bf2e495690dea21b2c7de16a | CDLVDIVRO1514                    |       4 |         8 |       250 | t3.xlarge   |   0.1664 |      0.0719 |  121.4720 |     52.4870 |  1457.6640 |    629.8440 |
+|  7 | ae0c4b74bf2e495690dea21b2c7de16a | kishan-windows                   |       4 |        16 |       500 | t3.xlarge   |   0.1664 |      0.0719 |  121.4720 |     52.4870 |  1457.6640 |    629.8440 |
+|  8 | ae0c4b74bf2e495690dea21b2c7de16a | CDLVDIVROWA0359                  |       4 |         8 |       250 | t3.xlarge   |   0.1664 |      0.0719 |  121.4720 |     52.4870 |  1457.6640 |    629.8440 |
+|  9 | ae0c4b74bf2e495690dea21b2c7de16a | infra-dc1cdl4-AZ2_cloud_agent    |       2 |         4 |        50 | t3.medium   |   0.0416 |      0.0180 |   30.3680 |     13.1400 |   364.4160 |    157.6800 |
+| 10 | ae0c4b74bf2e495690dea21b2c7de16a | CDLVDIVROWA0665                  |       8 |        16 |       350 | m6a.2xlarge |   0.3456 |      0.1568 |  252.2880 |    114.4348 |  3027.4560 |   1373.2176 |
+| 11 | ae0c4b74bf2e495690dea21b2c7de16a | infra-dc1cdl4_cloud_agent        |       2 |         4 |        50 | t3.medium   |   0.0416 |      0.0180 |   30.3680 |     13.1400 |   364.4160 |    157.6800 |
+| 12 |                                  | TOTAL                            |      50 |       106 |      2441 |             |   1.8896 |      0.8389 | 1379.4080 |    612.3824 | 16552.8960 |   7348.5888 |

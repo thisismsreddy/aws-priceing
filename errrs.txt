@@ -1,0 +1,5 @@
+(env) ➜  ~ python aws-priceing/openstack_aws_pricing_tool.py --cloud dc1-cdl-osp4 --project osp-c1npgt04-Infr-Arch --aws-csv aws-priceing/AmazonEC2-pricing-20250505.csv
+Traceback (most recent call last):
+  File "aws-priceing/openstack_aws_pricing_tool.py", line 127, in <module>
+    def build_report(conn, project_id: str | None, aws_prices_csv: Path):
+TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'

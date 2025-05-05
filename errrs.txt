@@ -1,28 +1,11 @@
 (env) ➜  ~ python aws-priceing/openstack_aws_pricing_tool.py --cloud dc1-cdl-osp4 --project osp-c1npgt04-Infr-Arch --aws-csv aws-priceing/AmazonEC2-pricing-20250505.csv
 Traceback (most recent call last):
-  File "/home/srini/env/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 3802, in get_loc
-    return self._engine.get_loc(casted_key)
-  File "pandas/_libs/index.pyx", line 138, in pandas._libs.index.IndexEngine.get_loc
-  File "pandas/_libs/index.pyx", line 165, in pandas._libs.index.IndexEngine.get_loc
-  File "pandas/_libs/hashtable_class_helper.pxi", line 5745, in pandas._libs.hashtable.PyObjectHashTable.get_item
-  File "pandas/_libs/hashtable_class_helper.pxi", line 5753, in pandas._libs.hashtable.PyObjectHashTable.get_item
-KeyError: 'Instance Type'
-
-The above exception was the direct cause of the following exception:
-
-Traceback (most recent call last):
-  File "aws-priceing/openstack_aws_pricing_tool.py", line 222, in <module>
+  File "aws-priceing/openstack_aws_pricing_tool.py", line 227, in <module>
     main()
-  File "aws-priceing/openstack_aws_pricing_tool.py", line 212, in main
+  File "aws-priceing/openstack_aws_pricing_tool.py", line 217, in main
     df = build_report(conn, pid, args.aws_csv)
-  File "aws-priceing/openstack_aws_pricing_tool.py", line 136, in build_report
+  File "aws-priceing/openstack_aws_pricing_tool.py", line 141, in build_report
     od_price, ri_price, spec_map = _instance_and_spec(price_df)
-  File "aws-priceing/openstack_aws_pricing_tool.py", line 91, in _instance_and_spec
-    spec_map[row['Instance Type']] = (int(row['Vcpu']), mem_gib)
-  File "/home/srini/env/lib/python3.8/site-packages/pandas/core/series.py", line 981, in __getitem__
-    return self._get_value(key)
-  File "/home/srini/env/lib/python3.8/site-packages/pandas/core/series.py", line 1089, in _get_value
-    loc = self.index.get_loc(label)
-  File "/home/srini/env/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 3804, in get_loc
-    raise KeyError(key) from err
-KeyError: 'Instance Type'
+  File "aws-priceing/openstack_aws_pricing_tool.py", line 98, in _instance_and_spec
+    ri = (inst[(inst['Term Type'] == 'Reserved') &
+TypeError: 'dict' object is not callable

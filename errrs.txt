@@ -1,3 +1,32 @@
+2025-05-05 14:31:37,151 - INFO - WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.120.122.140:5001
+2025-05-05 14:31:37,152 - INFO - Press CTRL+C to quit
+2025-05-05 14:31:41,138 - ERROR - Exception on / [GET]
+Traceback (most recent call last):
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1473, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 882, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 880, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 865, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "app-google.py", line 1057, in index
+    return render_template_string(HTML_TEMPLATE)
+  File "/home/srini/env/lib/python3.8/site-packages/flask/templating.py", line 161, in render_template_string
+    template = app.jinja_env.from_string(source)
+  File "/home/srini/env/lib/python3.8/site-packages/jinja2/environment.py", line 1105, in from_string
+    return cls.from_code(self, self.compile(source), gs, None)
+  File "/home/srini/env/lib/python3.8/site-packages/jinja2/environment.py", line 768, in compile
+    self.handle_exception(source=source_hint)
+  File "/home/srini/env/lib/python3.8/site-packages/jinja2/environment.py", line 936, in handle_exception
+    raise rewrite_traceback_stack(source=source)
+  File "<unknown>", line 16, in template
+jinja2.exceptions.TemplateSyntaxError: expected token 'end of print statement', got ':'
+
+
 (env) ➜  ~ python aws-priceing/openstack_aws_pricing_tool.py --cloud dc1-cdl-osp4 --project osp-c1npgt04-Infr-Arch --aws-csv aws-priceing/AmazonEC2-pricing-20250505.csv
 VMs: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 418/418 [00:02<00:00, 146.26vm/s]
 |    | Project                          | Server                           | vCPU   | RAM_GiB   | Disk_GB   | AWS_Type    |   OnDemand_Hourly |   RI3yr_Hourly |   OnDemand_Monthly |   OnDemand_Yearly |   RI3yr_Monthly |   RI3yr_Yearly |

@@ -95,10 +95,12 @@ def _pick_shape(vcpu: int, ram_mb: int, prices: Dict[str, float], spec: Dict[str
 # --- Report builder ---
 def build_report(conn, project_id: Optional[str], csv_path: Path) -> pd.DataFrame:
     od, ri, spec, gp3 = _extract_pricing(_load_csv(csv_path))
+    # ensure columns even if no rows
+    columns = ['Project','Server','vCPU','RAM_GiB','Disk_GB','AWS_Type','OnDemand_Hourly','RI3yr_Hourly']
+    rows: List[Dict[str, object]] = []
+    seen_vol: Dict[str, int] = {}
     flavors = {f.id: f for f in conn.compute.flavors()}
     flavors.update({f.name: f for f in flavors.values()})
-    seen_vol: Dict[str, int] = {}
-    rows: List[Dict[str, object]] = []
     servers = list(conn.compute.servers(details=True, all_projects=True))
     for srv in servers:
         if project_id and srv.project_id != project_id:
@@ -126,16 +128,25 @@ def build_report(conn, project_id: Optional[str], csv_path: Path) -> pd.DataFram
             'OnDemand_Hourly': None if od_hr is None else od_hr + storage_hr,
             'RI3yr_Hourly': None if ri_hr is None else ri_hr + storage_hr,
         })
-    df = pd.DataFrame(rows)
-    # compute monthly/yearly only if hourly columns exist
+    # build dataframe with fixed columns
+    df = pd.DataFrame(rows, columns=columns)
+    # compute monthly/yearly
     if 'OnDemand_Hourly' in df.columns:
-        df['OnDemand_Monthly'] = df['OnDemand_Hourly'] * HOURS_IN_MONTH
-        df['OnDemand_Yearly'] = df['OnDemand_Hourly'] * HOURS_IN_YEAR
+        df['OnDemand_Monthly'] = df['OnDemand_Hourly'].fillna(0) * HOURS_IN_MONTH
+        df['OnDemand_Yearly'] = df['OnDemand_Hourly'].fillna(0) * HOURS_IN_YEAR
     if 'RI3yr_Hourly' in df.columns:
-        df['RI3yr_Monthly'] = df['RI3yr_Hourly'] * HOURS_IN_MONTH
-        df['RI3yr_Yearly'] = df['RI3yr_Hourly'] * HOURS_IN_YEAR
-    total = {c: df[c].sum() if df[c].dtype.kind == 'f' else ('TOTAL' if c == 'Server' else '') for c in df.columns}
-    return pd.concat([df, pd.DataFrame([total])], ignore_index=True)
+        df['RI3yr_Monthly'] = df['RI3yr_Hourly'].fillna(0) * HOURS_IN_MONTH
+        df['RI3yr_Yearly'] = df['RI3yr_Hourly'].fillna(0) * HOURS_IN_YEAR
+    # add total row
+    total = {}
+    for c in df.columns:
+        if df[c].dtype.kind in ('i','f'):
+            total[c] = df[c].sum()
+        elif c == 'Server':
+            total[c] = 'TOTAL'
+        else:
+            total[c] = ''
+    return pd.concat([df, pd.DataFrame([total])], ignore_index=True)([df, pd.DataFrame([total])], ignore_index=True)
 
 # --- Flask web app ---
 app = Flask(__name__)

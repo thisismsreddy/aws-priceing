@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""openstack_aws_pricing_tool.py – friendly column names
+"""openstack_aws_pricing_tool.py – clean build (syntactically valid)
 
-Outputs:
-  • OnDemand_Hourly / Monthly / Yearly
-  • RI3yr_Hourly / Monthly / Yearly
+• Friendly column names (OnDemand_*/RI3yr_*)
+• Strict CSV filters (current‑gen, canonical OD & RI rows)
+• Includes gp3 storage cost (deduped)
 """
 from __future__ import annotations
-import argparse, re, sys
+
+import argparse
+import re
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
 import pandas as pd
 from openstack import connection
 from tabulate import tabulate
@@ -16,44 +20,43 @@ from tqdm import tqdm
 
 HOURS_IN_MONTH = 730
 HOURS_IN_YEAR = 8_760
-_SP = re.compile(r"\s+")
+_SPACE_RE = re.compile(r"\s+")
+
+# ───────────────────────────────────────── CSV helpers ──────
 
 def _load_csv(path: Path) -> pd.DataFrame:
+    """Load AWS price CSV starting at header row."""
     with path.open() as f:
         for i, line in enumerate(f):
-            if line.lstrip().startswith(('SKU', '"SKU"')):
-                header=i;break
+            if line.lstrip().startswith(("SKU", "\"SKU\"")):
+                header = i
+                break
         else:
-            raise ValueError('header not found')
+            raise ValueError("Header row not found in price file")
     return pd.read_csv(path, skiprows=header, quotechar='"', dtype=str)
 
-def _norm(df):
-    df.columns = (_SP.sub(' ', c.strip()).title() for c in df.columns)
+
+def _norm_cols(df: pd.DataFrame) -> None:
+    """Normalise column names in‑place and add aliases."""
+    df.columns = (_SPACE_RE.sub(" ", c.strip()).title() for c in df.columns)
     alias = {
         'Instancetype': 'Instance Type',
         'Vpcu': 'Vcpu',
         'Priceperunit': 'Price Per Unit',
         'Pricedescription': 'Price Description',
-        'Price Description': 'Price Description',
         'Termtype': 'Term Type',
         'Leasecontractlength': 'Lease Contract Length',
-        'Purchaseoption': 'Purchase Option'
+        'Purchaseoption': 'Purchase Option',
     }
-    df.rename(columns={k: v for k, v in alias.items() if k in df.columns}, inplace=True):
-    df.columns = (_SP.sub(' ', c.strip()).title() for c in df.columns)
-    df.rename(columns={'Instancetype':'Instance Type','Vpcu':'Vcpu','Priceperunit':'Price Per Unit','Termtype':'Term Type','Leasecontractlength':'Lease Contract Length','Purchaseoption':'Purchase Option'},inplace=True)
+    df.rename(columns={k: v for k, v in alias.items() if k in df.columns}, inplace=True)
 
-def _pricing(df: pd.DataFrame):
-    """Extract pricing dicts and gp3 hourly rate with stricter filters.
+# ─────────────────────────────────── pricing extraction ─────
 
-    * Only **current‑generation** instance rows
-    * On‑Demand rows must have a PriceDescription that contains "per On Demand"
-    * Reserved‑Instance rows must be the recurring hourly part (ignore "Upfront Fee")
-    """
-    _norm(df)
+def _extract_pricing(df: pd.DataFrame):
+    _norm_cols(df)
     df['Price Per Unit'] = pd.to_numeric(df['Price Per Unit'], errors='coerce')
 
-    inst = df[
+    base = df[
         (df['Product Family'].str.lower() == 'compute instance') &
         (df['Region Code'].str.lower() == 'us-east-1') &
         (df['Unit'] == 'Hrs') & (df['Currency'] == 'USD') &
@@ -63,27 +66,25 @@ def _pricing(df: pd.DataFrame):
         (df['Price Per Unit'] > 0)
     ].copy()
 
-    # Build spec map (vCPU, Memory GiB) from current‑gen rows
+    # Spec map
     spec: Dict[str, Tuple[int, int]] = {}
-    for itype, grp in inst.groupby('Instance Type'):
-        row = grp.iloc[0]
-        mem_gib = int(float(str(row['Memory']).split()[0]))
-        spec[itype] = (int(row['Vcpu']), mem_gib)
+    for itype, grp in base.groupby('Instance Type'):
+        first = grp.iloc[0]
+        mem_gib = int(float(str(first['Memory']).split()[0]))
+        spec[itype] = (int(first['Vcpu']), mem_gib)
 
-    od_df = inst[(inst['Term Type'] == 'OnDemand') &
-                 (inst.get('Price Description', '').str.contains('per On Demand', case=False, na=False))].str.contains('per On Demand', case=False, na=False))]
-    od = od_df.groupby('Instance Type')['Price Per Unit'].min().to_dict()
+    od_rows = base[(base['Term Type'] == 'OnDemand') &
+                   (base.get('Price Description', '').str.contains('per On Demand', case=False, na=False))]
+    od = od_rows.groupby('Instance Type')['Price Per Unit'].min().to_dict()
 
-    ri_df = inst[(inst['Term Type'] == 'Reserved') &
-                 (inst['Lease Contract Length'].str.startswith('3')) &
-                 (inst['Purchase Option'] == 'No Upfront') &
-                 (~inst.get('Price Description', '').str.contains('Upfront Fee', case=False, na=False))].str.startswith('3')) &
-                 (inst['Purchase Option'] == 'No Upfront') &
-                 (~inst['Price Description'].str.contains('Upfront Fee', case=False, na=False))]
-    ri = ri_df.groupby('Instance Type')['Price Per Unit'].min().to_dict()
+    ri_rows = base[(base['Term Type'] == 'Reserved') &
+                   (base['Lease Contract Length'].str.startswith('3')) &
+                   (base['Purchase Option'] == 'No Upfront') &
+                   (~base.get('Price Description', '').str.contains('Upfront Fee', case=False, na=False))]
+    ri = ri_rows.groupby('Instance Type')['Price Per Unit'].min().to_dict()
 
-    # gp3 hourly per‑GB
-    _norm(df)  # ensure storage columns normalized too
+    # gp3 storage $/hr/GB
+    _norm_cols(df)
     gp3_row = df[(df['Product Family'].str.lower() == 'storage') &
                  (df['Volume Api Name'] == 'gp3') &
                  (df['Region Code'].str.lower() == 'us-east-1') &
@@ -92,57 +93,96 @@ def _pricing(df: pd.DataFrame):
                  (df['Price Per Unit'] > 0)]
     gp3_hr = pd.to_numeric(gp3_row['Price Per Unit']).min() / HOURS_IN_MONTH
 
-    return od, ri, spec, gp3
+    return od, ri, spec, gp3_hr
 
-def _pick(vcpu:int,ram:int,prices,spec):
-    gib=(ram+1023)//1024
-    opts=[(t,p) for t,p in prices.items() if spec[t][0]>=vcpu and spec[t][1]>=gib]
-    return min(opts,key=lambda x:x[1]) if opts else (None,None)
+# ───────────────────────────── instance chooser ─────────────
 
-def build(conn, pid, csv):
-    od,ri,spec,gp3=_pricing(_load_csv(csv))
-    flav={f.id:f for f in conn.compute.flavors()};flav.update({f.name:f for f in flav.values()})
-    seen={}
-    rows=[]
-    servers=list(conn.compute.servers(details=True,all_projects=True))
-    with tqdm(total=len(servers),desc='VMs',unit='vm') as bar:
-        for s in servers:
+def _pick_shape(vcpu: int, ram_mb: int, prices: Dict[str, float], spec: Dict[str, Tuple[int, int]]):
+    ram_gib = (ram_mb + 1023) // 1024
+    choices = [(t, p) for t, p in prices.items() if spec[t][0] >= vcpu and spec[t][1] >= ram_gib]
+    return min(choices, key=lambda x: x[1]) if choices else (None, None)
+
+# ─────────────────────────── report builder ────────────────
+
+def build_report(conn, project_id: Optional[str], csv_path: Path):
+    od, ri, spec, gp3 = _extract_pricing(_load_csv(csv_path))
+
+    flavors = {f.id: f for f in conn.compute.flavors()}
+    flavors.update({f.name: f for f in flavors.values()})
+
+    seen_vol: Dict[str, int] = {}
+    rows: List[Dict[str, object]] = []
+
+    servers = list(conn.compute.servers(details=True, all_projects=True))
+    with tqdm(total=len(servers), desc='VMs', unit='vm') as bar:
+        for srv in servers:
             bar.update(1)
-            if pid and s.project_id!=pid:continue
-            f=flav.get(s.flavor.get('id') or s.flavor.get('original_name')) or conn.compute.find_flavor(s.flavor.get('id'),ignore_missing=True)
-            if not f:continue
-            v,r,root=f.vcpus,f.ram,f.disk
-            disk=root
-            for a in conn.compute.volume_attachments(server=s):
-                if a.id not in seen:seen[a.id]=conn.block_storage.get_volume(a.id).size
-                disk+=seen[a.id]
-            t,od_hr=_pick(v,r,od,spec)
-            ri_hr=ri.get(t) if t else None
-            stor=disk*gp3
-            rows.append({'Project':s.project_id,'Server':s.name,'vCPU':v,'RAM_GiB':(r+1023)//1024,'Disk_GB':disk,'AWS_Type':t or 'N/A','OnDemand_Hourly':None if od_hr is None else od_hr+stor,'RI3yr_Hourly':None if ri_hr is None else ri_hr+stor})
-    df=pd.DataFrame(rows)
-    for col in ['OnDemand_Hourly','RI3yr_Hourly']:
-        df[col.replace('Hourly','Monthly')]=df[col]*HOURS_IN_MONTH
-        df[col.replace('Hourly','Yearly')]=df[col]*HOURS_IN_YEAR
-    total={c:df[c].sum() if df[c].dtype.kind in 'f' else ('TOTAL' if c=='Server' else '') for c in df.columns}
-    return pd.concat([df,pd.DataFrame([total])],ignore_index=True)
+            if project_id and srv.project_id != project_id:
+                continue
+
+            f_ref = srv.flavor.get('id') or srv.flavor.get('original_name')
+            flav = flavors.get(f_ref) or conn.compute.find_flavor(f_ref, ignore_missing=True)
+            if not flav:
+                continue
+
+            vcpus, ram_mb, root = flav.vcpus, flav.ram, flav.disk
+            disk = root
+            for att in conn.compute.volume_attachments(server=srv):
+                if att.id not in seen_vol:
+                    seen_vol[att.id] = conn.block_storage.get_volume(att.id).size
+                disk += seen_vol[att.id]
+
+            itype, od_hr_inst = _pick_shape(vcpus, ram_mb, od, spec)
+            ri_hr_inst = ri.get(itype) if itype else None
+            storage_hr = disk * gp3
+
+            rows.append({
+                'Project': srv.project_id,
+                'Server': srv.name,
+                'vCPU': vcpus,
+                'RAM_GiB': (ram_mb + 1023)//1024,
+                'Disk_GB': disk,
+                'AWS_Type': itype or 'N/A',
+                'OnDemand_Hourly': None if od_hr_inst is None else od_hr_inst + storage_hr,
+                'RI3yr_Hourly': None if ri_hr_inst is None else ri_hr_inst + storage_hr,
+            })
+
+    df = pd.DataFrame(rows)
+    for col in ['OnDemand_Hourly', 'RI3yr_Hourly']:
+        df[col.replace('Hourly', 'Monthly')] = df[col] * HOURS_IN_MONTH
+        df[col.replace('Hourly', 'Yearly')] = df[col] * HOURS_IN_YEAR
+
+    total = {c: df[c].sum() if df[c].dtype.kind in 'f' else ('TOTAL' if c == 'Server' else '') for c in df.columns}
+    return pd.concat([df, pd.DataFrame([total])], ignore_index=True)
+
+# ───────────────────────────── CLI ─────────────────────────
 
 def main():
-    p=argparse.ArgumentParser()
-    g=p.add_mutually_exclusive_group(required=True)
-    g.add_argument('--project');g.add_argument('--all-projects',action='store_true')
-    p.add_argument('--cloud',default='openstack');p.add_argument('--aws-csv',type=Path,required=True);p.add_argument('--output',type=Path)
-    a=p.parse_args()
-    conn=connection.from_config(cloud=a.cloud)
-    pid=None
-    if not a.all_projects:
-        pr=conn.identity.find_project(a.project,ignore_missing=True);pid=pr.id if pr else a.project
-    df=build(conn,pid,a.aws_csv)
-    if a.output:
-        df.to_csv(a.output,index=False);print('saved →',a.output)
-    else:
-        print(tabulate(df,headers='keys',tablefmt='github',floatfmt='.4f'))
+    ap = argparse.ArgumentParser(description='OpenStack → AWS cost comparison')
+    grp = ap.add_mutually_exclusive_group(required=True)
+    grp.add_argument('--project')
+    grp.add_argument('--all-projects', action='store_true')
+    ap.add_argument('--cloud', default='openstack')
+    ap.add_argument('--aws-csv', required=True, type=Path)
+    ap.add_argument('--output', type=Path)
+    args = ap.parse_args()
 
-if __name__=='__main__':
-    try:main()
-    except KeyboardInterrupt:sys.exit(130)
+    conn = connection.from_config(cloud=args.cloud)
+    proj_id = None
+    if not args.all_projects:
+        pr = conn.identity.find_project(args.project, ignore_missing=True)
+        proj_id = pr.id if pr else args.project
+
+    df = build_report(conn, proj_id, args.aws_csv)
+
+    if args.output:
+        df.to_csv(args.output, index=False)
+        print('saved →', args.output)
+    else:
+        print(tabulate(df, headers='keys', tablefmt='github', floatfmt='.4f'))
+
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.exit(130)

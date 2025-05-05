@@ -45,11 +45,9 @@ def _norm_cols(df: pd.DataFrame) -> None:
     df.rename(columns={k: v for k, v in alias.items() if k in df.columns}, inplace=True)
 
 # --- Pricing extraction ---
-
 def _extract_pricing(df: pd.DataFrame):
     _norm_cols(df)
     df['Price Per Unit'] = pd.to_numeric(df['Price Per Unit'], errors='coerce')
-
     base = df[
         (df['Product Family'].str.lower() == 'compute instance') &
         (df['Region Code'].str.lower() == 'us-east-1') &
@@ -60,31 +58,18 @@ def _extract_pricing(df: pd.DataFrame):
         (df['Current Generation'].fillna('Yes') == 'Yes') &
         (df['Price Per Unit'] > 0)
     ].copy()
-
-    # Build spec map
     spec: Dict[str, Tuple[int, int]] = {}
     for itype, grp in base.groupby('Instance Type'):
         first = grp.iloc[0]
         mem_gib = int(float(str(first['Memory']).split()[0]))
         spec[itype] = (int(first['Vcpu']), mem_gib)
-
-    # On-Demand prices
-    od_rows = base[
-        (base['Term Type'] == 'OnDemand') &
-        (base['Price Description'].str.contains('per On Demand', case=False, na=False))
-    ]
-    od = od_rows.groupby('Instance Type')['Price Per Unit'].min().to_dict()
-
-    # Reserved 3-year No Upfront prices
-    ri_rows = base[
-        (base['Term Type'] == 'Reserved') &
-        (base['Lease Contract Length'].str.startswith('3')) &
-        (base['Purchase Option'] == 'No Upfront') &
-        (~base['Price Description'].str.contains('Upfront Fee', case=False, na=False))
-    ]
-    ri = ri_rows.groupby('Instance Type')['Price Per Unit'].min().to_dict()
-
-    # gp3 storage $/hr/GB
+    od = base[(base['Term Type'] == 'OnDemand') & base['Price Description'].str.contains('per On Demand', case=False, na=False)]
+    od = od.groupby('Instance Type')['Price Per Unit'].min().to_dict()
+    ri = base[(base['Term Type'] == 'Reserved') &
+              base['Lease Contract Length'].str.startswith('3') &
+              (base['Purchase Option'] == 'No Upfront') &
+              (~base['Price Description'].str.contains('Upfront Fee', case=False, na=False))]
+    ri = ri.groupby('Instance Type')['Price Per Unit'].min().to_dict()
     _norm_cols(df)
     gp3_row = df[
         (df['Product Family'].str.lower() == 'storage') &
@@ -95,7 +80,6 @@ def _extract_pricing(df: pd.DataFrame):
         (df['Price Per Unit'] > 0)
     ]
     gp3_hr = pd.to_numeric(gp3_row['Price Per Unit']).min() / HOURS_IN_MONTH
-
     return od, ri, spec, gp3_hr
 
 # --- Instance chooser ---
@@ -107,8 +91,6 @@ def _pick_shape(vcpu: int, ram_mb: int, prices: Dict[str, float], spec: Dict[str
 # --- Report builder ---
 def build_report(conn, project_id: Optional[str], csv_path: Path) -> pd.DataFrame:
     od, ri, spec, gp3 = _extract_pricing(_load_csv(csv_path))
-
-    # Column definitions
     columns = [
         'Project', 'Server', 'vCPU', 'RAM_GiB', 'Disk_GB',
         'AWS_Type', 'OnDemand_Hourly', 'RI3yr_Hourly',
@@ -117,8 +99,6 @@ def build_report(conn, project_id: Optional[str], csv_path: Path) -> pd.DataFram
     ]
     rows: List[Dict[str, object]] = []
     seen_vol: Dict[str, int] = {}
-
-    # Fetch and iterate VMs
     flavors = {f.id: f for f in conn.compute.flavors()}
     flavors.update({f.name: f for f in flavors.values()})
     servers = conn.compute.servers(details=True, all_projects=True)
@@ -129,18 +109,14 @@ def build_report(conn, project_id: Optional[str], csv_path: Path) -> pd.DataFram
         flav = flavors.get(f_ref) or conn.compute.find_flavor(f_ref, ignore_missing=True)
         if not flav:
             continue
-        # Compute disk size
         disk = flav.disk
         for att in conn.compute.volume_attachments(server=srv):
             if att.id not in seen_vol:
                 seen_vol[att.id] = conn.block_storage.get_volume(att.id).size
             disk += seen_vol[att.id]
-
-        # Pick matching AWS shape
         itype, od_hr = _pick_shape(flav.vcpus, flav.ram, od, spec)
-        ri_hr = ri.get(itype)
+        ri_hr = ri.get(itype, 0)
         storage_hr = disk * gp3
-
         rows.append({
             'Project': srv.project_id,
             'Server': srv.name,
@@ -149,15 +125,13 @@ def build_report(conn, project_id: Optional[str], csv_path: Path) -> pd.DataFram
             'Disk_GB': disk,
             'AWS_Type': itype or 'N/A',
             'OnDemand_Hourly': (od_hr or 0) + storage_hr,
-            'RI3yr_Hourly': (ri_hr or 0) + storage_hr,
+            'RI3yr_Hourly': ri_hr + storage_hr,
             'OnDemand_Monthly': ((od_hr or 0) + storage_hr) * HOURS_IN_MONTH,
             'OnDemand_Yearly': ((od_hr or 0) + storage_hr) * HOURS_IN_YEAR,
-            'RI3yr_Monthly': ((ri_hr or 0) + storage_hr) * HOURS_IN_MONTH,
-            'RI3yr_Yearly': ((ri_hr or 0) + storage_hr) * HOURS_IN_YEAR,
+            'RI3yr_Monthly': (ri_hr + storage_hr) * HOURS_IN_MONTH,
+            'RI3yr_Yearly': (ri_hr + storage_hr) * HOURS_IN_YEAR,
         })
-
     df = pd.DataFrame(rows, columns=columns)
-    # Add totals
     if not df.empty:
         totals = {c: (df[c].sum() if df[c].dtype.kind in ('i','f') else '') for c in df.columns}
         totals['Server'] = 'TOTAL'
@@ -188,7 +162,7 @@ FORM_HTML = '''<!doctype html>
         <label class="form-check-label" for="all_projects">All Projects</label>
       </div>
       <div class="mb-3">
-        <label for="project" class="form-label">Project ID (if not all)</label>
+        <label for="project" class="form-label">Project Name or ID (if not all)</label>
         <input type="text" class="form-control" id="project" name="project">
       </div>
       <button type="submit" class="btn btn-primary">Run</button>
@@ -222,9 +196,18 @@ RESULT_HTML = '''<!doctype html>
 def index():
     if request.method == 'POST':
         cloud = request.form.get('cloud', DEFAULT_CLOUD)
-        proj = None if request.form.get('all_projects') else request.form.get('project')
+        all_projects = True if request.form.get('all_projects') else False
+        raw_proj = request.form.get('project', '').strip()
         conn = connection.from_config(cloud=cloud)
-        df = build_report(conn, proj, CSV_PATH)
+        if all_projects:
+            project_id = None
+        else:
+            if raw_proj:
+                pr = conn.identity.find_project(raw_proj, ignore_missing=True)
+                project_id = pr.id if pr else raw_proj
+            else:
+                project_id = None
+        df = build_report(conn, project_id, CSV_PATH)
         return render_template_string(RESULT_HTML, default_cloud=DEFAULT_CLOUD, df=df)
     return render_template_string(FORM_HTML, default_cloud=DEFAULT_CLOUD)
 

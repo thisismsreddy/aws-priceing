@@ -1,5 +1,27 @@
 (env) ➜  ~ python aws-priceing/openstack_aws_pricing_tool.py --cloud dc1-cdl-osp4 --project osp-c1npgt04-Infr-Arch --aws-csv aws-priceing/AmazonEC2-pricing-20250505.csv
 Traceback (most recent call last):
-  File "aws-priceing/openstack_aws_pricing_tool.py", line 127, in <module>
-    def build_report(conn, project_id: str | None, aws_prices_csv: Path):
-TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'
+  File "aws-priceing/openstack_aws_pricing_tool.py", line 201, in <module>
+    main()
+  File "aws-priceing/openstack_aws_pricing_tool.py", line 187, in main
+    rows, missing = build_report(conn, None if args.all_projects else args.project, args.aws_csv)
+  File "aws-priceing/openstack_aws_pricing_tool.py", line 127, in build_report
+    aws_od, aws_ri = _load_aws_prices(aws_prices_csv)
+  File "aws-priceing/openstack_aws_pricing_tool.py", line 42, in _load_aws_prices
+    df = pd.read_csv(csv_path)
+  File "/home/srini/env/lib/python3.8/site-packages/pandas/util/_decorators.py", line 211, in wrapper
+    return func(*args, **kwargs)
+  File "/home/srini/env/lib/python3.8/site-packages/pandas/util/_decorators.py", line 331, in wrapper
+    return func(*args, **kwargs)
+  File "/home/srini/env/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 950, in read_csv
+    return _read(filepath_or_buffer, kwds)
+  File "/home/srini/env/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 611, in _read
+    return parser.read(nrows)
+  File "/home/srini/env/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 1778, in read
+    ) = self._engine.read(  # type: ignore[attr-defined]
+  File "/home/srini/env/lib/python3.8/site-packages/pandas/io/parsers/c_parser_wrapper.py", line 230, in read
+    chunks = self._reader.read_low_memory(nrows)
+  File "pandas/_libs/parsers.pyx", line 808, in pandas._libs.parsers.TextReader.read_low_memory
+  File "pandas/_libs/parsers.pyx", line 866, in pandas._libs.parsers.TextReader._read_rows
+  File "pandas/_libs/parsers.pyx", line 852, in pandas._libs.parsers.TextReader._tokenize_rows
+  File "pandas/_libs/parsers.pyx", line 1973, in pandas._libs.parsers.raise_parser_error
+pandas.errors.ParserError: Error tokenizing data. C error: Expected 2 fields in line 6, saw 91

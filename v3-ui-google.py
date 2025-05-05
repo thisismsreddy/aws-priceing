@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Single-file Flask web application for OpenStack -> AWS cost comparison.
-(Corrected version for Jinja2 TemplateSyntaxError)
+(Simplified UI version for debugging TemplateSyntaxError)
 """
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import os
 import re
 import sys
 import traceback
+import json # Needed for pretty-printing JSON in the simplified UI
 from pathlib import Path # Still needed for Path type hint, but not file loading
 from typing import Dict, List, Optional, Tuple
 
@@ -28,14 +29,18 @@ ALLOWED_EXTENSIONS = {'csv'}
 
 # --- Flask App Setup ---
 app = Flask(__name__)
-# No need for UPLOAD_FOLDER config if we process streams directly
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB upload limit
 
 # --- Logging Setup ---
-# Basic logging to console
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # --- Helper Functions (Pricing Logic - Kept Intact) ---
+# _allowed_file, _load_csv, _norm_cols, _extract_pricing, _pick_shape, build_report
+# remain EXACTLY the same as in the previous version.
+# --- SNIPPED FOR BREVITY - Assume they are correctly copied from the previous response ---
+# --- Make sure you copy them from the previous version into this spot! ---
+
+# START COPYING FROM PREVIOUS SCRIPT HERE
 
 def _allowed_file(filename):
     return '.' in filename and \           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -485,565 +490,209 @@ def build_report(conn, project_id: Optional[str], csv_stream: io.BytesIO):
 
     return final_df
 
+# END COPYING FROM PREVIOUS SCRIPT HERE
 
-# --- HTML Template, CSS, and JavaScript ---
 
-HTML_TEMPLATE = """
+# --- Simplified HTML Template, CSS, and JavaScript ---
+
+SIMPLE_HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenStack vs AWS Pricing</title>
-    <!-- DataTables CSS from CDN -->
-    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
-    <!-- Optional: jQuery UI CSS (optional, for theming) -->
-    <!-- <link rel="stylesheet" type="text/css" href="https://code.jquery.com/ui/1.13.2/themes/smoothness/jquery-ui.css"> -->
-
+    <title>Simplified Pricing Tool</title>
     <style>
-        /* --- Embedded CSS --- */
         body {{
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            margin: 20px;
-            background-color: #f4f7f6;
-            color: #333;
-            font-size: 14px; /* Slightly smaller base font */
+            font-family: sans-serif; margin: 20px; line-height: 1.6;
+            background-color: #f4f4f4;
         }}
         .container {{
-            max-width: 95%;
-            margin: auto;
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+             max-width: 800px; margin: auto; background: #fff;
+             padding: 20px; border-radius: 5px; box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }}
-        h1, h2 {{
-            text-align: center;
-            color: #2c3e50;
+        h1 {{ text-align: center; color: #333; }}
+        form {{ margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; background: #f9f9f9; }}
+        .form-group {{ margin-bottom: 15px; }}
+        label {{ display: block; margin-bottom: 5px; font-weight: bold; }}
+        input[type="text"], input[type="file"] {{
+            width: 98%; padding: 8px; border: 1px solid #ccc; border-radius: 3px;
         }}
-        h1 {{ margin-bottom: 30px; }}
-        h2 {{ margin-top: 40px; border-bottom: 1px solid #eee; padding-bottom: 10px; }}
-
-        form {{
-            margin-bottom: 30px;
-            padding: 25px;
-            border: 1px solid #dce3e9;
-            border-radius: 5px;
-            background-color: #fdfdfd;
+        button {{
+            padding: 10px 15px; background-color: #5cb85c; color: white;
+            border: none; border-radius: 3px; cursor: pointer;
         }}
-        .form-group {{
-            margin-bottom: 18px;
-        }}
-        label {{
-            display: block;
-            margin-bottom: 6px;
-            font-weight: 600; /* Bolder labels */
-            color: #555;
-        }}
-        input[type="text"], input[type="file"], select {{ /* Added select styling */
-            width: 100%; /* Full width */
-            padding: 10px; /* More padding */
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box; /* Include padding in width */
-            font-size: 14px;
-        }}
-        input[type="file"] {{
-            padding: 5px; /* Less padding for file input */
-            background-color: #fff; /* Ensure white background */
-        }}
-        .form-row {{
-            display: flex;
-            gap: 25px; /* More space between items */
-            align-items: flex-end; /* Align items to bottom */
-            flex-wrap: wrap;
-        }}
-        .form-row .form-group {{
-            flex: 1; /* Allow flexible growth */
-            min-width: 220px; /* Minimum width before wrapping */
-        }}
-        .form-group.checkbox-group {{
-            flex: 0 0 auto; /* Don't grow checkbox group */
-            align-self: center; /* Center checkbox vertically */
-            padding-bottom: 10px; /* Align baseline with inputs */
-        }}
-        .checkbox-group label {{
-            display: inline;
-            margin-left: 5px;
-            font-weight: normal; /* Normal weight for checkbox label */
-        }}
-        input[type="checkbox"] {{
-            margin-right: 5px;
-            vertical-align: middle;
-        }}
-
-        button[type="submit"] {{
-            padding: 12px 25px; /* Larger button */
-            background-color: #3498db; /* Blue color */
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 1em;
-            transition: background-color 0.2s ease;
-        }}
-        button[type="submit"]:hover {{
-            background-color: #2980b9; /* Darker blue */
-        }}
-        button[type="submit"]:disabled {{
-            background-color: #bdc3c7; /* Grey when disabled */
-            cursor: not-allowed;
-        }}
-
-        #loading {{
-            display: none;
-            text-align: center;
-            margin: 30px auto; /* Center horizontally */
-            font-size: 1.2em;
-            color: #555;
-        }}
-        #loading img {{
-            width: 40px;
-            height: 40px;
-            margin-top: 10px;
-            opacity: 0.8;
-        }}
-
+        button:disabled {{ background-color: #aaa; cursor: not-allowed; }}
+        button:hover:enabled {{ background-color: #4cae4c; }}
+        #loading {{ display: none; text-align: center; margin: 15px 0; color: #555; }}
         #error-message {{
-            display: none;
-            color: #c0392b; /* Red color */
-            border: 1px solid #e74c3c;
-            padding: 15px;
-            margin-top: 20px;
-            border-radius: 4px;
-            background-color: #fbeae5; /* Light red background */
+            display: none; color: #d9534f; border: 1px solid #d9534f;
+            padding: 10px; margin-top: 15px; border-radius: 3px; background-color: #f2dede;
         }}
-
-        #results {{
-            margin-top: 30px;
-            display: none; /* Hidden initially */
+        #results {{ margin-top: 20px; border: 1px solid #eee; padding: 10px; background: #fff; }}
+        #results pre {{
+             white-space: pre-wrap; /* Wrap long lines */
+             word-wrap: break-word; /* Break words if necessary */
+             max-height: 500px; /* Limit height */
+             overflow-y: auto; /* Add scrollbar if needed */
+             background: #f8f8f8;
+             padding: 10px;
+             border: 1px solid #ddd;
         }}
-
-        /* DataTables Enhancements */
-        .dataTables_wrapper {{
-            overflow-x: auto; /* Ensure horizontal scroll works */
-            padding-top: 10px;
-        }}
-        table.dataTable {{
-            width: 100% !important; /* Ensure table uses full width */
-            border-collapse: collapse !important; /* Cleaner borders */
-            margin: 0 auto; /* Center table if container allows */
-        }}
-        table.dataTable thead th {{
-            background-color: #eef1f5; /* Lighter header */
-            color: #333;
-            font-weight: 600;
-            border-bottom: 2px solid #ddd; /* Stronger bottom border */
-            text-align: left; /* Align headers left by default */
-            padding: 10px 12px; /* Adjust padding */
-        }}
-        table.dataTable tbody tr:nth-child(even) {{
-            background-color: #f9fafb; /* Subtle striping */
-        }}
-        table.dataTable tbody tr:hover {{
-            background-color: #f0f5f9; /* Hover effect */
-        }}
-        table.dataTable tbody td {{
-            padding: 8px 12px; /* Consistent padding */
-            border-bottom: 1px solid #ecf0f1; /* Lighter row border */
-            vertical-align: middle; /* Align cell content vertically */
-        }}
-        /* Right-align numeric columns */
-        table.dataTable td.dt-right, table.dataTable th.dt-right {{
-            text-align: right;
-        }}
-
-        /* Style for the TOTAL row */
-        table.dataTable tbody tr:last-child {{
-            font-weight: bold;
-            background-color: #e9ecef !important; /* Distinct background for total */
-            color: #000;
-        }}
-        table.dataTable tbody tr:last-child td {{
-             border-top: 2px solid #ccc; /* Separator line above total */
-        }}
-        table.dataTable tbody tr:last-child td:first-child {{
-            text-align: right; /* Align TOTAL label */
-        }}
-
-        /* DataTables controls styling */
-        .dataTables_length, .dataTables_filter, .dataTables_info, .dataTables_paginate {{
-            margin-top: 15px;
-            margin-bottom: 10px;
-            padding: 0 5px; /* Add slight padding */
-        }}
-        .dataTables_filter input {{
-            margin-left: 5px;
-            padding: 6px; /* Smaller search box */
-            border-radius: 3px;
-            border: 1px solid #ccc;
-        }}
-        .dataTables_length select {{
-             padding: 6px;
-             border-radius: 3px;
-             border: 1px solid #ccc;
-             margin: 0 5px;
-             width: auto; /* Don't force select full width */
-        }}
-         .dataTables_paginate .paginate_button {{
-            padding: 5px 10px;
-            margin: 0 2px;
-            border: 1px solid #ddd;
-            border-radius: 3px;
-            cursor: pointer;
-            background: #fff;
-            color: #337ab7;
-            text-decoration: none;
-        }}
-        .dataTables_paginate .paginate_button.current,
-        .dataTables_paginate .paginate_button:hover {{
-            background: #337ab7;
-            color: #fff !important;
-            border: 1px solid #337ab7;
-        }}
-        .dataTables_paginate .paginate_button.disabled,
-        .dataTables_paginate .paginate_button.disabled:hover {{
-            background: #eee;
-            color: #aaa !important;
-            border: 1px solid #ddd;
-            cursor: default;
-        }}
-         /* --- End Embedded CSS --- */
+        .checkbox-group label {{ display: inline; font-weight: normal; margin-left: 5px; }}
+        input[type="checkbox"] {{ vertical-align: middle; }}
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>OpenStack vs AWS Pricing Comparison</h1>
+        <h1>Simplified OpenStack vs AWS Pricing</h1>
 
         <form id="pricing-form">
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="cloud">OpenStack Cloud:</label>
-                    <input type="text" id="cloud" name="cloud" placeholder="e.g., my-cloud-config" required>
-                </div>
-                <div class="form-group">
-                    <label for="project">Project Name or ID:</label>
-                    <input type="text" id="project" name="project" placeholder="Leave blank if using 'All Projects'">
-                </div>
-                 <div class="form-group checkbox-group">
-                    <input type="checkbox" id="all_projects" name="all_projects">
-                    <label for="all_projects">Process All Projects</label>
-                </div>
+            <div class="form-group">
+                <label for="cloud">OpenStack Cloud:</label>
+                <input type="text" id="cloud" name="cloud" required>
             </div>
             <div class="form-group">
-                <label for="aws_csv">AWS Pricing CSV (EC2):</label>
+                <label for="project">Project Name or ID:</label>
+                <input type="text" id="project" name="project">
+            </div>
+            <div class="form-group checkbox-group">
+                 <input type="checkbox" id="all_projects" name="all_projects">
+                 <label for="all_projects">Process All Projects</label>
+            </div>
+            <div class="form-group">
+                <label for="aws_csv">AWS Pricing CSV:</label>
                 <input type="file" id="aws_csv" name="aws_csv" accept=".csv" required>
             </div>
-            <button type="submit" id="submit-button">Calculate Costs</button>
+            <button type="submit" id="submit-button">Calculate</button>
         </form>
 
-        <div id="loading">
-            <p>Calculating... This may take a few minutes for large environments.</p>
-            <!-- Simple spinner (CSS or SVG could also work) -->
-            <img src="data:image/gif;base64,R0lGODlhEAAQAPIAAP///wAAAMLCwkJCQgAAAGJiYoKCgpKSkiH/C05FVFNDQVBFMi4wAwEAAAAh/hpDcmVhdGVkIHdpdGggYWpheGxvYWQuaW5mbwAh+QQJCgAAACwAAAAAEAAQAAADMwi63P4wyklrE2MIOggZnAdOmGYJRbExwroUmcG2LmDEwnHQLVsYOd2mBzkYDAdKa+dIAAAh+QQJCgAAACwAAAAAEAAQAAADNAi63P5OjCEgG4QMu7DmikRxQlFUYDEZIGBMRVsaqHwctXXf7WEYB4Ag1xjihkMZsiUkKhIAIfkECQoAAAAsAAAAABAAEAAAAzYIujIjK8pByJDMlFYvBoVjHA70GU7xSUJhmKtwHPAKzLO9HMaoKwJZ7Rf8AYPDDzKpZBqfvwQAIfkECQoAAAAsAAAAABAAEAAAAzMIumIlK8oyhpHsnFZfhYumCYUhDAQxRIdhHBGqRoKw0R8DYlJd8z0fMDgsGo/IpHI5TAAAIfkECQoAAAAsAAAAABAAEAAAAzIIunInK0rnZBTwGPNMgQwmdsNgXGJUlIWEuR5oWUIpz8pAEAMe6TwfwyYsGo/IpFKSAAAh+QQJCgAAACwAAAAAEAAQAAADMwi6IMKQORfjdOe82p4wGccc4CEuQradylesojEMBgsUc2G7sDX3lQGBMLAJibufbSlKAAAh+QQJCgAAACwAAAAAEAAQAAADMgi63P7wCRHZnFVdmgHu2nFwlWCI3WGc3TSWhUFGxTAUkGCbtgENBMJAEJsxgMLWzpEAACH5BAkKAAAALAAAAAAQABAAAAMyCLrc/jDKSatlQtScKdceCAjDII7HcQ4EMTCpyrCuUBjCYRgHVtqlAiB1YhiCnlsRkAAAOwAAAAAAAAAAAA==" alt="Loading..." />
-        </div>
+        <div id="loading">Loading...</div>
         <div id="error-message"></div>
-
         <div id="results">
-            <h2>Results</h2>
-            <table id="results-table" class="display compact" style="width:100%">
-                <thead>
-                    <tr>
-                        <!-- Column headers defined here must match JS column definitions -->
-                        <th>Project</th>
-                        <th>Server</th>
-                        <th class="dt-right">vCPU</th>
-                        <th class="dt-right">RAM (GiB)</th>
-                        <th class="dt-right">Disk (GB)</th>
-                        <th>AWS Type</th>
-                        <th class="dt-right">OnDemand Hourly</th>
-                        <th class="dt-right">RI 3yr Hourly</th>
-                        <th class="dt-right">OnDemand Monthly</th>
-                        <th class="dt-right">OnDemand Yearly</th>
-                        <th class="dt-right">RI 3yr Monthly</th>
-                        <th class="dt-right">RI 3yr Yearly</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <!-- DataTables populates this -->
-                </tbody>
-                 <!-- Optional: Footer for column search or totals -->
-                 <!--
-                 <tfoot>
-                     <tr>
-                         <th>Project</th>
-                         <th>Server</th>
-                         <th>vCPU</th>
-                         <th>RAM_GiB</th>
-                         <th>Disk_GB</th>
-                         <th>AWS_Type</th>
-                         <th>OnDemand_Hourly</th>
-                         <th>RI3yr_Hourly</th>
-                         <th>OnDemand_Monthly</th>
-                         <th>OnDemand_Yearly</th>
-                         <th>RI3yr_Monthly</th>
-                         <th>RI3yr_Yearly</th>
-                    </tr>
-                 </tfoot>
-                 -->
-            </table>
+            <h2>Raw Results (JSON)</h2>
+            <pre id="results-data">Submit the form to see results here.</pre>
         </div>
     </div>
 
-    <!-- JavaScript Libraries from CDN -->
+    <!-- jQuery CDN -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-    <!-- Optional: DataTables Buttons extension (for CSV export etc.) -->
-    <!--
-    <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/pdfmake.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/vfs_fonts.js"></script>
-    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
-    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
-    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
-    -->
 
     <script>
-        // --- Embedded JavaScript ---
         $(document).ready(function() {
-            let dataTableInstance = null; // To hold the DataTable instance
+            // Hide results initially
+            $('#results').hide();
 
-            // Function to format numbers to fixed decimal places or return 'N/A'
-            // Handles null, undefined, NaN, and non-numeric strings gracefully.
-            function formatNumber(num, places = 4, defaultValue = 'N/A') {
-                 // Check if the input is strictly null or undefined
-                 if (num === null || typeof num === 'undefined') {
-                    return defaultValue;
-                 }
-                 // Attempt conversion to float
-                 const number = parseFloat(num);
-                 // Check if the conversion resulted in NaN
-                 if (isNaN(number)) {
-                    // Return default value if input wasn't a valid number representation
-                    return defaultValue;
-                 }
-                 // Format the valid number
-                 return number.toFixed(places);
-            }
-
-            // Define columns for DataTables (must match keys in JSON from backend)
-            // 'title' is optional if the th text in HTML is sufficient.
-            // 'className' is used for styling (like text alignment).
-            // 'render' is used for formatting data display.
-            const tableColumns = [
-                { data: 'Project', title: 'Project' },
-                { data: 'Server', title: 'Server' },
-                { data: 'vCPU', title: 'vCPU', className: 'dt-right' },
-                { data: 'RAM_GiB', title: 'RAM (GiB)', className: 'dt-right' },
-                { data: 'Disk_GB', title: 'Disk (GB)', className: 'dt-right' },
-                { data: 'AWS_Type', title: 'AWS Type' },
-                {
-                    data: 'OnDemand_Hourly', title: 'OnDemand Hourly', className: 'dt-right',
-                    render: function(data, type, row) {
-                        // Use 6 decimal places for hourly rates if needed, or keep 4
-                        return type === 'display' ? formatNumber(data, 6) : data;
-                    }
-                },
-                {
-                    data: 'RI3yr_Hourly', title: 'RI 3yr Hourly', className: 'dt-right',
-                     render: function(data, type, row) {
-                        return type === 'display' ? formatNumber(data, 6) : data;
-                    }
-                },
-                {
-                    data: 'OnDemand_Monthly', title: 'OnDemand Monthly', className: 'dt-right',
-                    render: function(data, type, row) {
-                         return type === 'display' ? formatNumber(data, 2) : data; // 2 decimals for monthly/yearly
-                    }
-                },
-                {
-                    data: 'OnDemand_Yearly', title: 'OnDemand Yearly', className: 'dt-right',
-                    render: function(data, type, row) {
-                        return type === 'display' ? formatNumber(data, 2) : data;
-                    }
-                },
-                {
-                    data: 'RI3yr_Monthly', title: 'RI 3yr Monthly', className: 'dt-right',
-                    render: function(data, type, row) {
-                        return type === 'display' ? formatNumber(data, 2) : data;
-                    }
-                },
-                {
-                    data: 'RI3yr_Yearly', title: 'RI 3yr Yearly', className: 'dt-right',
-                    render: function(data, type, row) {
-                        return type === 'display' ? formatNumber(data, 2) : data;
-                    }
-                }
-            ];
-
-            // Initialize DataTable with defined columns and options
-            function initializeDataTable() {
-                if (dataTableInstance) {
-                    dataTableInstance.destroy(); // Destroy previous instance if exists
-                    $('#results-table tbody').empty(); // Clear the table body manually
-                }
-                dataTableInstance = $('#results-table').DataTable({
-                    columns: tableColumns,
-                    data: [], // Start with empty data
-                    pageLength: 25,
-                    lengthMenu: [ [10, 25, 50, 100, -1], [10, 25, 50, 100, "All"] ],
-                    order: [], // Initial no sorting
-                    scrollX: true, // Enable horizontal scrolling
-                    // ** THE FIX IS HERE: Removed {{ and }} around this object **
-                    language: {
-                        "emptyTable": "No data available in table",
-                        "zeroRecords": "No matching records found",
-                        "info": "Showing _START_ to _END_ of _TOTAL_ entries",
-                        "infoEmpty": "Showing 0 entries",
-                        "infoFiltered": "(filtered from _MAX_ total entries)"
-                    },
-                    // Optional: Add Buttons for export
-                    // dom: 'Bfrtip', // Needed for Buttons
-                    // buttons: [
-                    //     'copyHtml5',
-                    //     'excelHtml5',
-                    //     'csvHtml5',
-                    //     'pdfHtml5'
-                    // ]
-                });
-            }
-
-            // Initialize the DataTable structure on page load
-            initializeDataTable();
-            $('#results').hide(); // Hide results section initially
-
-            // Handle form submission
-            $('#pricing-form').on('submit', function(event) {
-                event.preventDefault(); // Prevent default page reload
-
-                const formData = new FormData(this);
-                const $submitButton = $('#submit-button');
-                const $loadingIndicator = $('#loading');
-                const $errorMessage = $('#error-message');
-                const $resultsSection = $('#results');
-
-                // Client-side validation (enhanced)
-                const cloud = formData.get('cloud').trim();
-                const project = formData.get('project').trim();
-                const allProjects = $('#all_projects').is(':checked'); // Use jQuery's is(':checked')
-                const fileInput = $('#aws_csv')[0];
-                const file = fileInput.files.length > 0 ? fileInput.files[0] : null;
-
-                $errorMessage.hide().text(''); // Clear previous errors
-
-                if (!cloud) {
-                     $errorMessage.text('Error: Please enter the OpenStack Cloud name.').show();
-                     return;
-                }
-                if (!allProjects && !project) {
-                     $errorMessage.text('Error: Please enter a Project Name/ID or check "Process All Projects".').show();
-                    return;
-                }
-                 if (!file) {
-                    $errorMessage.text('Error: Please select an AWS Pricing CSV file.').show();
-                    return;
-                }
-                 if (file.type && file.type !== "text/csv" && !file.name.toLowerCase().endsWith('.csv')) {
-                    $errorMessage.text('Error: Invalid file type. Please upload a CSV file.').show();
-                    return;
-                 }
-                 // Optional: Check file size (matches Flask config)
-                 if (file.size > 16 * 1024 * 1024) {
-                    $errorMessage.text('Error: File size exceeds 16 MB limit.').show();
-                    return;
-                 }
-
-
-                // Disable button, show loading, hide results
-                $submitButton.prop('disabled', true).text('Calculating...');
-                $loadingIndicator.show();
-                $resultsSection.hide();
-
-                // Clear previous results in DataTable before new request
-                if (dataTableInstance) {
-                    dataTableInstance.clear().draw();
-                } else {
-                    initializeDataTable(); // Ensure it's initialized if first run failed maybe
-                }
-
-                // Make AJAX request to Flask backend
-                $.ajax({
-                    url: '/api/calculate', // Ensure this matches your Flask route
-                    type: 'POST',
-                    data: formData,
-                    processData: false, // Important: prevent jQuery from processing FormData
-                    contentType: false, // Important: let browser set Content-Type with boundary
-                    dataType: 'json',   // Expect JSON response from Flask
-                    success: function(response) {
-                        $loadingIndicator.hide();
-                        $submitButton.prop('disabled', false).text('Calculate Costs');
-
-                        if (response.data && Array.isArray(response.data)) {
-                            console.log("Data received:", response.data.length, "rows");
-                            if (dataTableInstance) {
-                                dataTableInstance.rows.add(response.data); // Add new data
-                                dataTableInstance.columns.adjust().draw(); // Adjust columns and redraw
-                                $resultsSection.show(); // Show the results section
-                            } else {
-                                console.error("DataTable instance is not available.");
-                                $errorMessage.text('Error: Could not display results table.').show();
-                            }
-                             if (response.data.length === 0 || (response.data.length === 1 && response.data[0].Server === 'TOTAL')) {
-                                console.log("Response contains no server data (or only TOTAL row).");
-                                // Optionally show a specific message if only TOTAL row exists or it's empty
-                            }
-                        } else if (response.error) {
-                             console.error("Backend Error:", response.error);
-                             $errorMessage.text('Error: ' + response.error).show();
-                        } else {
-                             console.error("Unexpected response format:", response);
-                             $errorMessage.text('Error: Received unexpected data format from server. Check console.').show();
-                        }
-                    },
-                    error: function(jqXHR, textStatus, errorThrown) {
-                        console.error("AJAX Error:", textStatus, errorThrown, jqXHR.responseText);
-                        $loadingIndicator.hide();
-                        $submitButton.prop('disabled', false).text('Calculate Costs');
-
-                        let errorMsg = 'An unknown error occurred during calculation.';
-                        if (jqXHR.responseJSON && jqXHR.responseJSON.error) {
-                            errorMsg = jqXHR.responseJSON.error; // Error message from Flask JSON response
-                        } else if (jqXHR.status === 413) {
-                            errorMsg = 'Error: The uploaded file is too large (max 16MB).';
-                        } else if (jqXHR.responseText) {
-                            // Avoid displaying full HTML error pages; show concise info
-                            if (jqXHR.responseText.length < 500 && !jqXHR.responseText.trim().startsWith('<')) {
-                                errorMsg = `Server Error (${jqXHR.status}): ${jqXHR.responseText}`;
-                            } else {
-                                 errorMsg = `Server Error: ${jqXHR.status} ${errorThrown}. Check server logs for details.`;
-                            }
-                        } else {
-                            errorMsg = `Network Error: ${textStatus} - ${errorThrown}`;
-                        }
-                        $errorMessage.text(errorMsg).show();
-                    }
-                });
-            });
-
-            // Logic for Project Name / All Projects checkbox interaction
+            // Handle checkbox interaction
             $('#all_projects').on('change', function() {
                 const isChecked = $(this).is(':checked');
                 $('#project').prop('disabled', isChecked);
                 if (isChecked) {
-                    $('#project').val(''); // Clear project field when disabled
+                    $('#project').val('');
                 }
             });
-            // Trigger the change handler on load to set initial state
-            $('#all_projects').trigger('change');
+            $('#all_projects').trigger('change'); // Set initial state
 
+            // Handle form submission
+            $('#pricing-form').on('submit', function(event) {
+                event.preventDefault(); // Stop default form submission
+
+                const formData = new FormData(this);
+                const $submitButton = $('#submit-button');
+                const $loading = $('#loading');
+                const $errorMsg = $('#error-message');
+                const $resultsDiv = $('#results');
+                const $resultsData = $('#results-data');
+
+                // Basic validation
+                const cloud = formData.get('cloud').trim();
+                const project = formData.get('project').trim();
+                const allProjects = $('#all_projects').is(':checked');
+                const fileInput = $('#aws_csv')[0];
+
+                $errorMsg.hide().text(''); // Clear previous errors
+                $resultsDiv.hide();
+                $resultsData.text(''); // Clear previous results
+
+                if (!cloud) {
+                     $errorMsg.text('Error: Please enter the OpenStack Cloud name.').show();
+                     return;
+                }
+                if (!allProjects && !project) {
+                     $errorMsg.text('Error: Please enter a Project Name/ID or check "Process All Projects".').show();
+                    return;
+                }
+                 if (!fileInput.files || fileInput.files.length === 0) {
+                    $errorMsg.text('Error: Please select an AWS Pricing CSV file.').show();
+                    return;
+                 }
+                const file = fileInput.files[0];
+                 if (file.type && file.type !== "text/csv" && !file.name.toLowerCase().endsWith('.csv')) {
+                    $errorMsg.text('Error: Invalid file type. Please upload a CSV file.').show();
+                    return;
+                 }
+                 if (file.size > 16 * 1024 * 1024) { // Check size (matches Flask config)
+                    $errorMsg.text('Error: File size exceeds 16 MB limit.').show();
+                    return;
+                 }
+
+                // UI updates: disable button, show loading
+                $submitButton.prop('disabled', true).text('Calculating...');
+                $loading.show();
+
+                // AJAX call
+                $.ajax({
+                    url: '/api/calculate', // Your calculation endpoint
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    dataType: 'json', // Expect JSON back
+                    success: function(response) {
+                        $loading.hide();
+                        $submitButton.prop('disabled', false).text('Calculate');
+
+                        if (response.data) {
+                            // Display raw JSON response
+                            const prettyJson = JSON.stringify(response.data, null, 2); // Pretty print
+                            $resultsData.text(prettyJson);
+                            $resultsDiv.show();
+                        } else if (response.error) {
+                            $errorMsg.text('Error: ' + response.error).show();
+                        } else {
+                             $errorMsg.text('Error: Received an unexpected response format.').show();
+                        }
+                    },
+                    error: function(jqXHR, textStatus, errorThrown) {
+                        $loading.hide();
+                        $submitButton.prop('disabled', false).text('Calculate');
+
+                        let errorText = 'An unknown error occurred.';
+                         if (jqXHR.responseJSON && jqXHR.responseJSON.error) {
+                            errorText = jqXHR.responseJSON.error;
+                        } else if (jqXHR.status === 413) {
+                            errorText = 'Error: The uploaded file is too large (max 16MB).';
+                        } else if (jqXHR.responseText) {
+                             try {
+                                // Try parsing responseText as JSON for potential error details
+                                const errData = JSON.parse(jqXHR.responseText);
+                                if (errData && errData.error) {
+                                    errorText = errData.error;
+                                } else {
+                                    errorText = `Server Error (${jqXHR.status}): ${jqXHR.responseText.substring(0, 200)}`; // Limit length
+                                }
+                             } catch(e) {
+                                // If not JSON, show plain text excerpt
+                                errorText = `Server Error (${jqXHR.status}): ${jqXHR.responseText.substring(0, 200)}`;
+                             }
+                        } else {
+                            errorText = `Network Error: ${textStatus} - ${errorThrown}`;
+                        }
+                        $errorMsg.text(errorText).show();
+                    }
+                });
+            });
         });
-        // --- End Embedded JavaScript ---
     </script>
 
 </body>
@@ -1054,19 +703,17 @@ HTML_TEMPLATE = """
 
 @app.route('/')
 def index():
-    """Serves the main page with embedded HTML, CSS, and JS."""
-    return render_template_string(HTML_TEMPLATE)
+    """Serves the SIMPLIFIED main page."""
+    # **Using the simplified template string**
+    return render_template_string(SIMPLE_HTML_TEMPLATE)
 
 @app.route('/favicon.ico')
 def favicon():
-     # Simple 204 No Content response for favicon requests to avoid 404s
-     # Or you could embed a base64 favicon in the HTML head <link> tag
-     return '', 204
-
+     return '', 204 # Simple 204 No Content
 
 @app.route('/api/calculate', methods=['POST'])
 def calculate_costs():
-    """API endpoint to trigger the calculation."""
+    """API endpoint - REMAINS THE SAME as previous versions"""
     if 'aws_csv' not in request.files:
         return jsonify({"error": "No AWS CSV file part in the request."}), 400
     file = request.files['aws_csv']
@@ -1077,7 +724,6 @@ def calculate_costs():
 
     cloud_name = request.form.get('cloud', '').strip()
     project_name = request.form.get('project', '').strip() # Might be empty
-    # Checkbox value is 'on' if checked, otherwise None/missing
     use_all_projects = request.form.get('all_projects') == 'on'
 
     if not cloud_name:
@@ -1085,46 +731,40 @@ def calculate_costs():
     if not use_all_projects and not project_name:
         return jsonify({"error": "Either Project Name/ID or 'Process All Projects' must be checked."}), 400
     if use_all_projects and project_name:
-        # Prioritize 'all_projects' if both are somehow submitted
         project_name = None
         logging.info("Both project and 'All Projects' provided. Using 'All Projects'.")
         project_id_to_use = None
     elif use_all_projects:
-        project_id_to_use = None # Explicitly None for clarity
+        project_id_to_use = None
         logging.info("Processing for all projects.")
     else:
-        # Need to resolve project_name to project_id
-        project_id_to_use = None # Initialize
+        project_id_to_use = None
 
     # --- OpenStack Connection and Project Resolution ---
-    conn = None # Initialize connection variable
+    conn = None
     try:
         logging.info(f"Attempting connection to cloud: {cloud_name}")
         conn = connection.from_config(cloud=cloud_name)
-        # Minimal check to verify connection works
         conn.identity.get_user('self')
         logging.info(f"Successfully connected to OpenStack cloud: {cloud_name}")
 
-        # Resolve Project ID if a specific project was requested
         if not use_all_projects and project_name:
             logging.info(f"Resolving project identifier: '{project_name}'")
             try:
-                # find_project tries name first, then ID if name fails
-                pr = conn.identity.find_project(project_name, ignore_missing=False) # Fail if not found
+                pr = conn.identity.find_project(project_name, ignore_missing=False)
                 project_id_to_use = pr.id
                 logging.info(f"Found project '{pr.name}' with ID: {project_id_to_use}")
             except OpenStackCloudException as e:
                 logging.error(f"Failed to find project '{project_name}': {e}")
-                # Distinguish between "not found" and other errors if possible from exception details
-                return jsonify({"error": f"OpenStack project '{project_name}' not found or inaccessible. Verify name/ID and permissions."}), 404 # 404 Not Found
-            except Exception as e_find: # Catch broader errors during find
+                return jsonify({"error": f"OpenStack project '{project_name}' not found or inaccessible. Verify name/ID and permissions."}), 404
+            except Exception as e_find:
                  logging.error(f"Unexpected error resolving project '{project_name}': {e_find}")
                  return jsonify({"error": f"Unexpected error resolving project '{project_name}'. Details: {e_find}"}), 500
 
     except OpenStackCloudException as e:
         logging.error(f"Failed to connect to OpenStack cloud '{cloud_name}': {e}")
-        return jsonify({"error": f"Failed to connect to OpenStack cloud '{cloud_name}'. Check cloud config and credentials. Details: {e}"}), 503 # Service Unavailable or similar
-    except Exception as e: # Catch other potential connection errors (e.g., config file issues)
+        return jsonify({"error": f"Failed to connect to OpenStack cloud '{cloud_name}'. Check cloud config and credentials. Details: {e}"}), 503
+    except Exception as e:
         logging.error(f"Unexpected error setting up OpenStack connection '{cloud_name}': {e}")
         return jsonify({"error": f"Unexpected error connecting to OpenStack cloud '{cloud_name}'. Details: {e}"}), 500
     # --- End Connection Handling ---
@@ -1132,33 +772,20 @@ def calculate_costs():
 
     # --- Perform Calculation ---
     try:
-        # Pass the file stream directly (file.stream is io.BytesIO)
         report_df = build_report(conn, project_id_to_use, file.stream)
-
-        # Convert DataFrame to JSON suitable for DataTables (list of objects)
-        # Handle NaN/None -> None (null in JSON) for better JS handling if needed
-        # If NaNs should be strings like 'N/A', use fillna('N/A')
         report_df_clean = report_df.where(pd.notnull(report_df), None)
-
         json_data = report_df_clean.to_dict(orient='records')
-
-        return jsonify({"data": json_data})
+        return jsonify({"data": json_data}) # Success
 
     except (ValueError, ConnectionError, RuntimeError) as e:
-         # Catch specific errors raised by build_report or helpers
          logging.error(f"Calculation failed: {e}\n{traceback.format_exc()}")
-         # Use 400 for user input/data errors, 500/503 for internal/connection issues
          status_code = 503 if isinstance(e, ConnectionError) else 400
          return jsonify({"error": f"Calculation Error: {str(e)}"}), status_code
     except Exception as e:
-         # Catch any other unexpected errors during the main process
          logging.error(f"An unexpected error occurred during calculation: {e}\n{traceback.format_exc()}")
          return jsonify({"error": "An internal server error occurred during calculation."}), 500
     # --- End Calculation ---
 
 # --- Main Execution ---
 if __name__ == '__main__':
-    # Set host='0.0.0.0' to be accessible on the network
-    # Use debug=False for production/sharing
-    # Choose a port (e.g., 5001 or another free port)
-    app.run(host='0.0.0.0', port=5001, debug=False)
+    app.run(host='0.0.0.0', port=5001, debug=False) # Remember to turn debug off for production

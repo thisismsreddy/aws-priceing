@@ -70,7 +70,7 @@ def _extract_pricing(df: pd.DataFrame):
 
     ri_rows = base[(base['Term Type'] == 'Reserved') &
                    (base['Lease Contract Length'].str.startswith('3')) &
-                   (base['Purchase Option'] == 'No Upfront') &
+                   (df['Purchase Option'] == 'No Upfront') &
                    (~base.get('Price Description', '').str.contains('Upfront Fee', case=False, na=False))]
     ri = ri_rows.groupby('Instance Type')['Price Per Unit'].min().to_dict()
 
@@ -95,7 +95,6 @@ def _pick_shape(vcpu: int, ram_mb: int, prices: Dict[str, float], spec: Dict[str
 # --- Report builder ---
 def build_report(conn, project_id: Optional[str], csv_path: Path) -> pd.DataFrame:
     od, ri, spec, gp3 = _extract_pricing(_load_csv(csv_path))
-    # ensure columns even if no rows
     columns = ['Project','Server','vCPU','RAM_GiB','Disk_GB','AWS_Type','OnDemand_Hourly','RI3yr_Hourly']
     rows: List[Dict[str, object]] = []
     seen_vol: Dict[str, int] = {}
@@ -128,16 +127,13 @@ def build_report(conn, project_id: Optional[str], csv_path: Path) -> pd.DataFram
             'OnDemand_Hourly': None if od_hr is None else od_hr + storage_hr,
             'RI3yr_Hourly': None if ri_hr is None else ri_hr + storage_hr,
         })
-    # build dataframe with fixed columns
     df = pd.DataFrame(rows, columns=columns)
-    # compute monthly/yearly
     if 'OnDemand_Hourly' in df.columns:
         df['OnDemand_Monthly'] = df['OnDemand_Hourly'].fillna(0) * HOURS_IN_MONTH
         df['OnDemand_Yearly'] = df['OnDemand_Hourly'].fillna(0) * HOURS_IN_YEAR
     if 'RI3yr_Hourly' in df.columns:
         df['RI3yr_Monthly'] = df['RI3yr_Hourly'].fillna(0) * HOURS_IN_MONTH
         df['RI3yr_Yearly'] = df['RI3yr_Hourly'].fillna(0) * HOURS_IN_YEAR
-    # add total row
     total = {}
     for c in df.columns:
         if df[c].dtype.kind in ('i','f'):
@@ -146,7 +142,8 @@ def build_report(conn, project_id: Optional[str], csv_path: Path) -> pd.DataFram
             total[c] = 'TOTAL'
         else:
             total[c] = ''
-    return pd.concat([df, pd.DataFrame([total])], ignore_index=True)([df, pd.DataFrame([total])], ignore_index=True)
+    # correct return without calling DataFrame
+    return pd.concat([df, pd.DataFrame([total])], ignore_index=True)
 
 # --- Flask web app ---
 app = Flask(__name__)

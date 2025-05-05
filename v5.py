@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
-from flask import Flask, request, render_template_string
+from flask import Flask, request, render_template_string, url_for
 from openstack import connection
 
 # Constants
@@ -30,6 +30,7 @@ def _load_csv(path: Path) -> pd.DataFrame:
         else:
             raise ValueError("Header row not found in price file")
     return pd.read_csv(path, skiprows=header, quotechar='"', dtype=str)
+
 
 def _norm_cols(df: pd.DataFrame) -> None:
     df.columns = (_SPACE_RE.sub(" ", c.strip()).title() for c in df.columns)
@@ -167,9 +168,7 @@ FORM_HTML = '''<!doctype html>
 <body>
   <div id="loading">
     <div class="d-flex align-items-center justify-content-center h-100">
-      <img src="https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExMmpwdDBzNzN6djV3cWM3NGtzMzE1ZGxjeDRuZWp2YWZpdHdsZmt5ZiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/cGQihe7X3yehxr4BsX/giphy.gif" alt="Loading..." />
-    </div>
-  </div>
+      <img src="{{ url_for('static', filename='loading.gif') }}" alt="Loading..." />
     </div>
   </div>
   <nav class="navbar navbar-expand-lg navbar-dark bg-primary">

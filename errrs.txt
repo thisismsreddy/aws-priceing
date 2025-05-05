@@ -1,46 +1,17 @@
 (env) ➜  ~ python aws-priceing/openstack_aws_pricing_tool.py --cloud dc1-cdl-osp4 --project osp-c1npgt04-Infr-Arch --aws-csv aws-priceing/AmazonEC2-pricing-20250505.csv
-Fetching VMs:   1%|█▏                                                                                | 6/417 [00:00<00:04, 91.07vm/s]
-Traceback (most recent call last):
-  File "aws-priceing/openstack_aws_pricing_tool.py", line 226, in <module>
-    main()
-  File "aws-priceing/openstack_aws_pricing_tool.py", line 212, in main
-    rows, missing = build_report(conn, proj_id, args.aws_csv)
-  File "aws-priceing/openstack_aws_pricing_tool.py", line 159, in build_report
-    flav = conn.compute.get_flavor(srv.flavor["id"])
-  File "/home/srini/env/lib/python3.8/site-packages/openstack/compute/v2/_proxy.py", line 196, in get_flavor
-    flavor = self._get(_flavor.Flavor, flavor)
-  File "/home/srini/env/lib/python3.8/site-packages/openstack/proxy.py", line 64, in check
-    return method(self, expected, actual, *args, **kwargs)
-  File "/home/srini/env/lib/python3.8/site-packages/openstack/proxy.py", line 649, in _get
-    return res.fetch(
-  File "/home/srini/env/lib/python3.8/site-packages/openstack/resource.py", line 1650, in fetch
-    self._translate_response(response, **kwargs)
-  File "/home/srini/env/lib/python3.8/site-packages/openstack/resource.py", line 1253, in _translate_response
-    exceptions.raise_from_response(response, error_message=error_message)
-  File "/home/srini/env/lib/python3.8/site-packages/openstack/exceptions.py", line 240, in raise_from_response
-    raise cls(
-openstack.exceptions.ResourceNotFound: No Flavor found for gp.small: Client Error for url: https://openstack.ospcdl4.cloud1.oneadp.com:13774/v2.1/flavors/gp.small, Flavor gp.small could not be found.
-
-(env) ➜  ~ openstack flavor show gp.small
-+----------------------------+--------------------------------------+
-| Field                      | Value                                |
-+----------------------------+--------------------------------------+
-| OS-FLV-DISABLED:disabled   | False                                |
-| OS-FLV-EXT-DATA:ephemeral  | 0                                    |
-| access_project_ids         | None                                 |
-| description                | None                                 |
-| disk                       | 50                                   |
-| id                         | e4cc815f-c9ee-45db-a990-648ce94b6991 |
-| name                       | gp.small                             |
-| os-flavor-access:is_public | True                                 |
-| properties                 |                                      |
-| ram                        | 2048                                 |
-| rxtx_factor                | 1.0                                  |
-| swap                       |                                      |
-| vcpus                      | 2                                    |
-+----------------------------+--------------------------------------+
-
-
-
-
-
+Fetching VMs: 100%|███████████████████████████████████████████████████████████████████████████████| 417/417 [00:02<00:00, 141.93vm/s]
+|    | project                          | server                           |   vcpus |   ram_GiB |   disk_GB | aws_type    |   on_demand$/hr |   ri3yr$/hr |
+|----|----------------------------------|----------------------------------|---------|-----------|-----------|-------------|-----------------|-------------|
+|  0 | ae0c4b74bf2e495690dea21b2c7de16a | linuxtest                        |       2 |         2 |        50 | c5d.2xlarge |          0.0000 |      0.1610 |
+|  1 | ae0c4b74bf2e495690dea21b2c7de16a | CDLDTIACVDM0006                  |       8 |        16 |       365 | c5d.2xlarge |          0.0000 |      0.1610 |
+|  2 | ae0c4b74bf2e495690dea21b2c7de16a | CDLDTIACVDM0007                  |       8 |        16 |       271 | c5d.2xlarge |          0.0000 |      0.1610 |
+|  3 | ae0c4b74bf2e495690dea21b2c7de16a | DC1CDL4-operatiosn-t_cloud_agent |       2 |         4 |        50 | c5d.2xlarge |          0.0000 |      0.1610 |
+|  4 | ae0c4b74bf2e495690dea21b2c7de16a | CDLDTXASVPF0004                  |       4 |         8 |       205 | c5d.2xlarge |          0.0000 |      0.1610 |
+|  5 | ae0c4b74bf2e495690dea21b2c7de16a | DC1CDL-infra-arch-AZ_cloud_agent |       2 |         4 |        50 | c5d.2xlarge |          0.0000 |      0.1610 |
+|  6 | ae0c4b74bf2e495690dea21b2c7de16a | CDLVDIVRO1514                    |       4 |         8 |       250 | c5d.2xlarge |          0.0000 |      0.1610 |
+|  7 | ae0c4b74bf2e495690dea21b2c7de16a | kishan-windows                   |       4 |        16 |       500 | c5d.2xlarge |          0.0000 |      0.1610 |
+|  8 | ae0c4b74bf2e495690dea21b2c7de16a | CDLVDIVROWA0359                  |       4 |         8 |       250 | c5d.2xlarge |          0.0000 |      0.1610 |
+|  9 | ae0c4b74bf2e495690dea21b2c7de16a | infra-dc1cdl4-AZ2_cloud_agent    |       2 |         4 |        50 | c5d.2xlarge |          0.0000 |      0.1610 |
+| 10 | ae0c4b74bf2e495690dea21b2c7de16a | CDLVDIVROWA0665                  |       8 |        16 |       350 | c5d.2xlarge |          0.0000 |      0.1610 |
+| 11 | ae0c4b74bf2e495690dea21b2c7de16a | infra-dc1cdl4_cloud_agent        |       2 |         4 |        50 | c5d.2xlarge |          0.0000 |      0.1610 |
+(env) ➜  ~

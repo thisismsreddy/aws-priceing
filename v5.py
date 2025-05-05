@@ -167,7 +167,9 @@ FORM_HTML = '''<!doctype html>
 <body>
   <div id="loading">
     <div class="d-flex align-items-center justify-content-center h-100">
-      <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+      <img src="https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExMmpwdDBzNzN6djV3cWM3NGtzMzE1ZGxjeDRuZWp2YWZpdHdsZmt5ZiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/cGQihe7X3yehxr4BsX/giphy.gif" alt="Loading..." />
+    </div>
+  </div>
     </div>
   </div>
   <nav class="navbar navbar-expand-lg navbar-dark bg-primary">

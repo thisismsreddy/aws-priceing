@@ -1,3 +1,43 @@
+(env) ➜  aws-priceing git:(main) ✗ python app1.py
+ * Serving Flask app 'app1'
+ * Debug mode: on
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+Press CTRL+C to quit
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 113-789-396
+127.0.0.1 - - [05/May/2025 17:23:30] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [05/May/2025 17:23:46] "POST / HTTP/1.1" 500 -
+Traceback (most recent call last):
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1498, in __call__
+    return self.wsgi_app(environ, start_response)
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1476, in wsgi_app
+    response = self.handle_exception(e)
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1473, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 882, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 880, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 865, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "/home/srini/aws-priceing/app1.py", line 208, in index
+    df = build_report(conn, proj, CSV_PATH)
+  File "/home/srini/aws-priceing/app1.py", line 150, in build_report
+    return pd.concat([df, pd.DataFrame([total])], ignore_index=True)([df, pd.DataFrame([total])], ignore_index=True)
+TypeError: 'DataFrame' object is not callable
+127.0.0.1 - - [05/May/2025 17:23:46] "GET /?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1" 304 -
+127.0.0.1 - - [05/May/2025 17:23:46] "GET /?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1" 304 -
+127.0.0.1 - - [05/May/2025 17:23:46] "GET /?__debugger__=yes&cmd=resource&f=console.png&s=EKkJAyS6oEy8k4OQ7Zmi HTTP/1.1" 200 -
+127.0.0.1 - - [05/May/2025 17:23:46] "GET /?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 304 -
+
+
+
+
+
+
+
 127.0.0.1 - - [05/May/2025 16:59:27] "GET /?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1" 304 -
 127.0.0.1 - - [05/May/2025 16:59:27] "GET /?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1" 304 -
 127.0.0.1 - - [05/May/2025 16:59:27] "GET /?__debugger__=yes&cmd=resource&f=console.png&s=zs1mr6lWLu9h8rfF6A5W HTTP/1.1" 200 -

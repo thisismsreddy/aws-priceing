@@ -1,11 +1,26 @@
 #!/usr/bin/env python3
-"""openstack_aws_pricing_tool.py  (rev‑3)
+"""openstack_aws_pricing_tool.py  —  *real‑pricing edition*
 
-Adds **monthly, yearly** cost columns and a grand‑total summary row.
+Compares the cost of running OpenStack VMs to AWS **with:**
+• **Complete EC2 instance catalog** (auto‑parsed from the provided price CSV)
+• **EBS gp3 storage pricing** per attached volume (deduplicated across multi‑attach)
+• Hourly, monthly (730 h) and yearly (8 760 h) totals for **On‑Demand** and **3‑yr No‑Upfront RI**
+• Grand totals at the bottom
 
-USAGE remains the same:
-  python openstack_aws_pricing_tool.py --cloud <cloud> --project <proj> \
-         --aws-csv ./prices/AmazonEC2-pricing-20250505.csv
+Dependencies
+------------
+```bash
+pip install openstacksdk pandas tqdm tabulate
+```
+
+Example
+-------
+```bash
+python openstack_aws_pricing_tool.py \
+  --cloud dc1-cdl-osp4 \
+  --project osp-c1npgt04-Infr-Arch \
+  --aws-csv ./prices/AmazonEC2-pricing-20250505.csv
+```
 """
 from __future__ import annotations
 
@@ -19,71 +34,108 @@ from openstack import connection, exceptions as os_exc
 from tqdm import tqdm
 from tabulate import tabulate
 
-HOURS_IN_MONTH = 730   # avg 365/12*24
-HOURS_IN_YEAR  = 8760
+HOURS_IN_MONTH = 730  # avg
+HOURS_IN_YEAR = 8_760
 
 # ────────────────────────────────────────────────────────────────────────────────
-# AWS price loading (unchanged)
+# 1. Parse AWS price list CSV
 # ────────────────────────────────────────────────────────────────────────────────
 
-def _load_aws_prices(csv_path: Path):
+def _read_price_csv(csv_path: Path) -> pd.DataFrame:
+    """Return DataFrame starting at header row (auto‑detect)."""
     with csv_path.open("r", newline="") as f:
         for idx, line in enumerate(f):
             if line.lstrip().startswith(("SKU", "\"SKU\"")):
-                header = idx
+                header_idx = idx
                 break
         else:
-            raise ValueError("CSV header not found (no line starting with 'SKU')")
+            raise ValueError("Could not find header row (starts with SKU)")
+    return pd.read_csv(csv_path, skiprows=header_idx, quotechar='"', dtype=str)
 
-    df = pd.read_csv(csv_path, skiprows=header, quotechar='"', dtype=str)
+
+def _extract_instance_prices(df: pd.DataFrame):
+    """Return (on_demand, ri_3yr, spec_map).
+
+    * on_demand / ri_3yr: {instance_type: hourly USD}
+    * spec_map: {instance_type: (vCPU, memory_GiB)}
+    """
     df.columns = df.columns.str.strip()
     df["PricePerUnit"] = pd.to_numeric(df["PricePerUnit"], errors="coerce")
 
-    base = df[
-        (df["Region Code"] == "us-east-1") & (df["Unit"] == "Hrs") & (df["Currency"] == "USD") &
-        (df["Tenancy"].fillna("Shared") == "Shared") & (df["Operating System"].fillna("Linux") == "Linux") &
+    inst = df[
+        (df["Product Family"] == "Compute Instance") &
+        (df["Region Code"] == "us-east-1") &
+        (df["Unit"] == "Hrs") &
+        (df["Currency"] == "USD") &
+        (df["Tenancy"].fillna("Shared") == "Shared") &
+        (df["Operating System"].fillna("Linux") == "Linux") &
         (df["PricePerUnit"].notna()) & (df["PricePerUnit"] > 0)
+    ].copy()
+
+    # Build spec map (vCPU, Mem GiB)
+    spec_map: Dict[str, Tuple[int, int]] = {}
+    for _, row in inst.groupby("Instance Type").first().iterrows():
+        spec_map[row["Instance Type"]] = (int(row["vCPU"]), int(float(row["Memory"].split()[0])))
+
+    od = (
+        inst[inst["TermType"] == "OnDemand"]
+        .groupby("Instance Type")["PricePerUnit"].min().to_dict()
+    )
+
+    ri = (
+        inst[(inst["TermType"] == "Reserved") &
+             (inst["LeaseContractLength"] == "3yr") &
+             (inst["PurchaseOption"] == "No Upfront")]
+            .groupby("Instance Type")["PricePerUnit"].min().to_dict()
+    )
+    return od, ri, spec_map
+
+
+def _extract_gp3_price(df: pd.DataFrame) -> float:
+    """Return hourly USD per‑GB for gp3 (On‑Demand)."""
+    df.columns = df.columns.str.strip()
+    gp3 = df[
+        (df["Product Family"] == "Storage") &
+        (df["Volume API Name"] == "gp3") &
+        (df["Region Code"] == "us-east-1") &
+        (df["Unit"].str.contains("GB")) &
+        (df["TermType"] == "OnDemand") &
+        (df["PricePerUnit"].notna()) & (pd.to_numeric(df["PricePerUnit"]) > 0)
     ]
-
-    od = (base[base["TermType"] == "OnDemand"].groupby("Instance Type")["PricePerUnit"].min().to_dict())
-    ri = (base[(base["TermType"] == "Reserved") & (base["LeaseContractLength"] == "3yr") &
-               (base["PurchaseOption"] == "No Upfront")]
-           .groupby("Instance Type")["PricePerUnit"].min().to_dict())
-    return od, ri
+    if gp3.empty:
+        raise ValueError("gp3 pricing not found in CSV")
+    price_gb_month = gp3.iloc[0]["PricePerUnit"].astype(float)
+    return price_gb_month / HOURS_IN_MONTH  # convert to hourly
 
 # ────────────────────────────────────────────────────────────────────────────────
-# Minimal spec map (demo only)
+# 2. Choose cheapest instance meeting vCPU/RAM
 # ────────────────────────────────────────────────────────────────────────────────
-_AWS_SPECS: Dict[str, Tuple[int, int]] = {
-    "t3.small": (2, 2), "t3.medium": (2, 4), "t3.large": (2, 8), "t3.xlarge": (4, 16),
-    "m6a.large": (2, 8), "m6a.xlarge": (4, 16), "m6a.2xlarge": (8, 32), "m6a.4xlarge": (16, 64),
-    "c5d.xlarge": (4, 8), "c5d.2xlarge": (8, 16),
-}
 
-
-def _choose_instance(vcpu: int, ram_mb: int, aws_od: Dict[str, float]):
+def _choose_instance(vcpu: int, ram_mb: int, od_prices: Dict[str, float], spec: Dict[str, Tuple[int, int]]):
     ram_gib = (ram_mb + 1023) // 1024
     fits = [
-        (itype, price) for itype, price in aws_od.items()
-        if price and price > 0 and _AWS_SPECS.get(itype, (0, 0))[0] >= vcpu and _AWS_SPECS[itype][1] >= ram_gib
+        (itype, price) for itype, price in od_prices.items()
+        if spec.get(itype, (0, 0))[0] >= vcpu and spec[itype][1] >= ram_gib
     ]
     return min(fits, key=lambda x: x[1]) if fits else (None, None)
 
 # ────────────────────────────────────────────────────────────────────────────────
-# Report builder
+# 3. Build cost report
 # ────────────────────────────────────────────────────────────────────────────────
 
-def build_report(conn, project_id: Optional[str], csv: Path):
-    aws_od, aws_ri = _load_aws_prices(csv)
+def build_report(conn, project_id: Optional[str], price_csv: Path):
+    df_price = _read_price_csv(price_csv)
+    od_price, ri_price, spec_map = _extract_instance_prices(df_price)
+    gp3_hr = _extract_gp3_price(df_price)
 
     # flavour cache
-    flav_map: Dict[str, object] = {}
-    for f in conn.compute.flavors():
-        flav_map[f.id] = f
-        flav_map[f.name] = f
+    flav_cache: Dict[str, object] = {f.id: f for f in conn.compute.flavors()}
+    flav_cache.update({f.name: f for f in flav_cache.values()})
 
     rows: List[Dict[str, object]] = []
     missing_shapes: Set[Tuple[int, int]] = set()
+
+    seen_vols: Dict[str, int] = {}  # volume_id → size (dedup across multi‑attach)
 
     servers = list(conn.compute.servers(details=True, all_projects=True))
     with tqdm(total=len(servers), desc="Fetching VMs", unit="vm") as bar:
@@ -93,23 +145,27 @@ def build_report(conn, project_id: Optional[str], csv: Path):
                 continue
 
             flav_ref = srv.flavor.get("id") or srv.flavor.get("original_name")
-            flav = flav_map.get(flav_ref)
-            if not flav:
-                try:
-                    flav = conn.compute.get_flavor(flav_ref)
-                except os_exc.ResourceNotFound:
-                    flav = conn.compute.find_flavor(flav_ref, ignore_missing=True)
+            flav = flav_cache.get(flav_ref) or conn.compute.find_flavor(flav_ref, ignore_missing=True)
             if not flav:
                 print(f"[WARN] missing flavor {flav_ref} for {srv.name}", file=sys.stderr)
                 continue
 
             vcpus, ram_mb, root_gb = flav.vcpus, flav.ram, flav.disk
-            total_disk = root_gb + sum(conn.block_storage.get_volume(att.id).size for att in conn.compute.volume_attachments(server=srv))
 
-            itype, od_hr = _choose_instance(vcpus, ram_mb, aws_od)
-            ri_hr = aws_ri.get(itype) if itype else None
+            # Attached volumes (dedup)
+            total_disk = root_gb
+            for att in conn.compute.volume_attachments(server=srv):
+                if att.id not in seen_vols:
+                    vol = conn.block_storage.get_volume(att.id)
+                    seen_vols[att.id] = vol.size
+                total_disk += seen_vols[att.id]
+
+            itype, od_hr = _choose_instance(vcpus, ram_mb, od_price, spec_map)
+            ri_hr = ri_price.get(itype) if itype else None
             if not itype:
                 missing_shapes.add((vcpus, (ram_mb + 1023)//1024))
+
+            storage_hr = total_disk * gp3_hr
 
             rows.append({
                 "project": srv.project_id,
@@ -118,40 +174,45 @@ def build_report(conn, project_id: Optional[str], csv: Path):
                 "ram_GiB": (ram_mb + 1023)//1024,
                 "disk_GB": total_disk,
                 "aws_type": itype or "N/A",
-                "od$/hr": od_hr,
-                "ri3yr$/hr": ri_hr,
-                "od$/mo": None if od_hr is None else od_hr * HOURS_IN_MONTH,
-                "ri3yr$/mo": None if ri_hr is None else ri_hr * HOURS_IN_MONTH,
-                "od$/yr": None if od_hr is None else od_hr * HOURS_IN_YEAR,
-                "ri3yr$/yr": None if ri_hr is None else ri_hr * HOURS_IN_YEAR,
+                "od$/hr": None if od_hr is None else od_hr + storage_hr,
+                "ri3yr$/hr": None if ri_hr is None else ri_hr + storage_hr,
             })
 
-    return rows, missing_shapes
+    df = pd.DataFrame(rows)
+    # expand monthly/yearly columns
+    for col in ["od$/hr", "ri3yr$/hr"]:
+        df[col.replace("/hr", "/mo")] = df[col] * HOURS_IN_MONTH
+        df[col.replace("/hr", "/yr")] = df[col] * HOURS_IN_YEAR
+
+    # grand total row
+    numeric_cols = df.select_dtypes("number").columns
+    total = {c: df[c].sum() if c in numeric_cols else ("TOTAL" if c == "server" else "") for c in df.columns}
+    df = pd.concat([df, pd.DataFrame([total])], ignore_index=True)
+
+    return df, missing_shapes
 
 # ────────────────────────────────────────────────────────────────────────────────
-# CLI
+# 4. CLI
 # ────────────────────────────────────────────────────────────────────────────────
 
 def main():
-    p = argparse.ArgumentParser(description="Compare OpenStack VM costs to AWS")
-    scope = p.add_mutually_exclusive_group(required=True)
-    scope.add_argument("--project", help="OpenStack project name or ID")
-    scope.add_argument("--all-projects", action="store_true")
-    p.add_argument("--cloud", default="openstack")
-    p.add_argument("--aws-csv", required=True, type=Path)
-    p.add_argument("--output", type=Path)
-    args = p.parse_args()
+    ap = argparse.ArgumentParser(description="Compare OpenStack VM costs to AWS (real pricing)")
+    grp = ap.add_mutually_exclusive_group(required=True)
+    grp.add_argument("--project", help="OpenStack project name or ID")
+    grp.add_argument("--all-projects", action="store_true")
+    ap.add_argument("--cloud", default="openstack")
+    ap.add_argument("--aws-csv", required=True, type=Path)
+    ap.add_argument("--output", type=Path)
+    args = ap.parse_args()
 
     conn = connection.from_config(cloud=args.cloud)
-    proj_id = None if args.all_projects else (conn.identity.find_project(args.project, ignore_missing=True) or args.project).id if not args.all_projects else None
 
-    rows, missing = build_report(conn, proj_id, args.aws_csv)
-    df = pd.DataFrame(rows)
+    proj_id = None
+    if not args.all_projects:
+        proj = conn.identity.find_project(args.project, ignore_missing=True)
+        proj_id = proj.id if proj else args.project  # accept raw UUID fallback
 
-    # Add grand‑total row for numeric columns
-    numeric_cols = [c for c in df.columns if df[c].dtype.kind in "fi"]
-    total_row = {c: df[c].sum() if c in numeric_cols else ("TOTAL" if c == "server" else "") for c in df.columns}
-    df = pd.concat([df, pd.DataFrame([total_row])], ignore_index=True)
+    df, missing = build_report(conn, proj_id, args.aws_csv)
 
     if args.output:
         df.to_csv(args.output, index=False)
@@ -160,7 +221,7 @@ def main():
         print(tabulate(df, headers="keys", tablefmt="github", floatfmt=".4f"))
 
     if missing:
-        print("[WARN] AWS spec map missing shapes:", sorted(missing), file=sys.stderr)
+        print("[WARN] no AWS shape match for:", sorted(missing), file=sys.stderr)
 
 if __name__ == "__main__":
     try:

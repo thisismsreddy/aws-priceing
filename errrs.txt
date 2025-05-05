@@ -1,3 +1,34 @@
+jinja2.exceptions.TemplateSyntaxError: expected token 'end of print statement', got ':'
+2025-05-05 14:37:13,117 - INFO - 127.0.0.1 - - [05/May/2025 14:37:13] "GET / HTTP/1.1" 500 -
+2025-05-05 14:37:13,167 - INFO - 127.0.0.1 - - [05/May/2025 14:37:13] "GET /favicon.ico HTTP/1.1" 204 -
+2025-05-05 14:37:13,335 - ERROR - Exception on / [GET]
+Traceback (most recent call last):
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1473, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 882, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 880, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 865, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "app-google.py", line 1221, in index
+    return render_template_string(HTML_TEMPLATE)
+  File "/home/srini/env/lib/python3.8/site-packages/flask/templating.py", line 161, in render_template_string
+    template = app.jinja_env.from_string(source)
+  File "/home/srini/env/lib/python3.8/site-packages/jinja2/environment.py", line 1105, in from_string
+    return cls.from_code(self, self.compile(source), gs, None)
+  File "/home/srini/env/lib/python3.8/site-packages/jinja2/environment.py", line 768, in compile
+    self.handle_exception(source=source_hint)
+  File "/home/srini/env/lib/python3.8/site-packages/jinja2/environment.py", line 936, in handle_exception
+    raise rewrite_traceback_stack(source=source)
+  File "<unknown>", line 16, in template
+jinja2.exceptions.TemplateSyntaxError: expected token 'end of print statement', got ':'
+2025-05-05 14:37:13,337 - INFO - 127.0.0.1 - - [05/May/2025 14:37:13] "GET / HTTP/1.1" 500 -
+2025-05-05 14:37:13,420 - INFO - 127.0.0.1 - - [05/May/2025 14:37:13] "GET /favicon.ico HTTP/1.1" 204 -
+
+
+
+
 2025-05-05 14:31:37,151 - INFO - WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
  * Running on all addresses (0.0.0.0)
  * Running on http://127.0.0.1:5001

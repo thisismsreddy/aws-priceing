@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Single-file Flask web application for OpenStack -> AWS cost comparison.
-(Simplified UI version for debugging TemplateSyntaxError)
+(Simplified UI version - Corrected Jinja2 Syntax Error by using single braces in CSS)
 """
 from __future__ import annotations
 
@@ -36,11 +36,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 # --- Helper Functions (Pricing Logic - Kept Intact) ---
 # _allowed_file, _load_csv, _norm_cols, _extract_pricing, _pick_shape, build_report
-# remain EXACTLY the same as in the previous version.
-# --- SNIPPED FOR BREVITY - Assume they are correctly copied from the previous response ---
-# --- Make sure you copy them from the previous version into this spot! ---
+# Assume they are correctly copied from the previous versions.
 
-# START COPYING FROM PREVIOUS SCRIPT HERE
+# START COPYING FROM PREVIOUS SCRIPT HERE (Backend Logic Functions)
 
 def _allowed_file(filename):
     return '.' in filename and \           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -490,11 +488,12 @@ def build_report(conn, project_id: Optional[str], csv_stream: io.BytesIO):
 
     return final_df
 
-# END COPYING FROM PREVIOUS SCRIPT HERE
+# END COPYING FROM PREVIOUS SCRIPT HERE (Backend Logic Functions)
 
 
 # --- Simplified HTML Template, CSS, and JavaScript ---
 
+# *** CORRECTION APPLIED HERE: Replaced {{ with { and }} with } in CSS ***
 SIMPLE_HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -503,34 +502,34 @@ SIMPLE_HTML_TEMPLATE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Simplified Pricing Tool</title>
     <style>
-        body {{
+        body {
             font-family: sans-serif; margin: 20px; line-height: 1.6;
             background-color: #f4f4f4;
-        }}
-        .container {{
+        }
+        .container {
              max-width: 800px; margin: auto; background: #fff;
              padding: 20px; border-radius: 5px; box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }}
-        h1 {{ text-align: center; color: #333; }}
-        form {{ margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; background: #f9f9f9; }}
-        .form-group {{ margin-bottom: 15px; }}
-        label {{ display: block; margin-bottom: 5px; font-weight: bold; }}
-        input[type="text"], input[type="file"] {{
+        }
+        h1 { text-align: center; color: #333; }
+        form { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; background: #f9f9f9; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], input[type="file"] {
             width: 98%; padding: 8px; border: 1px solid #ccc; border-radius: 3px;
-        }}
-        button {{
+        }
+        button {
             padding: 10px 15px; background-color: #5cb85c; color: white;
             border: none; border-radius: 3px; cursor: pointer;
-        }}
-        button:disabled {{ background-color: #aaa; cursor: not-allowed; }}
-        button:hover:enabled {{ background-color: #4cae4c; }}
-        #loading {{ display: none; text-align: center; margin: 15px 0; color: #555; }}
-        #error-message {{
+        }
+        button:disabled { background-color: #aaa; cursor: not-allowed; }
+        button:hover:enabled { background-color: #4cae4c; }
+        #loading { display: none; text-align: center; margin: 15px 0; color: #555; }
+        #error-message {
             display: none; color: #d9534f; border: 1px solid #d9534f;
             padding: 10px; margin-top: 15px; border-radius: 3px; background-color: #f2dede;
-        }}
-        #results {{ margin-top: 20px; border: 1px solid #eee; padding: 10px; background: #fff; }}
-        #results pre {{
+        }
+        #results { margin-top: 20px; border: 1px solid #eee; padding: 10px; background: #fff; }
+        #results pre {
              white-space: pre-wrap; /* Wrap long lines */
              word-wrap: break-word; /* Break words if necessary */
              max-height: 500px; /* Limit height */
@@ -538,9 +537,9 @@ SIMPLE_HTML_TEMPLATE = """
              background: #f8f8f8;
              padding: 10px;
              border: 1px solid #ddd;
-        }}
-        .checkbox-group label {{ display: inline; font-weight: normal; margin-left: 5px; }}
-        input[type="checkbox"] {{ vertical-align: middle; }}
+        }
+        .checkbox-group label { display: inline; font-weight: normal; margin-left: 5px; }
+        input[type="checkbox"] { vertical-align: middle; }
     </style>
 </head>
 <body>
@@ -579,6 +578,7 @@ SIMPLE_HTML_TEMPLATE = """
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 
     <script>
+        // No changes needed in JS for this fix, as {{ }} wasn't used incorrectly here
         $(document).ready(function() {
             // Hide results initially
             $('#results').hide();
@@ -704,7 +704,7 @@ SIMPLE_HTML_TEMPLATE = """
 @app.route('/')
 def index():
     """Serves the SIMPLIFIED main page."""
-    # **Using the simplified template string**
+    # Using the simplified template string with corrected CSS braces
     return render_template_string(SIMPLE_HTML_TEMPLATE)
 
 @app.route('/favicon.ico')
@@ -713,7 +713,7 @@ def favicon():
 
 @app.route('/api/calculate', methods=['POST'])
 def calculate_costs():
-    """API endpoint - REMAINS THE SAME as previous versions"""
+    """API endpoint - REMAINS THE SAME"""
     if 'aws_csv' not in request.files:
         return jsonify({"error": "No AWS CSV file part in the request."}), 400
     file = request.files['aws_csv']

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
-from flask import Flask, request, render_template_string, url_for
+from flask import Flask, request, render_template_string
 from openstack import connection
 
 # Constants
@@ -31,8 +31,8 @@ def _load_csv(path: Path) -> pd.DataFrame:
             raise ValueError("Header row not found in price file")
     return pd.read_csv(path, skiprows=header, quotechar='"', dtype=str)
 
-
 def _norm_cols(df: pd.DataFrame) -> None:
+    """Normalize column names and apply common aliases."""
     df.columns = (_SPACE_RE.sub(" ", c.strip()).title() for c in df.columns)
     alias = {
         'Instancetype': 'Instance Type',
@@ -59,18 +59,31 @@ def _extract_pricing(df: pd.DataFrame):
         (df['Current Generation'].fillna('Yes') == 'Yes') &
         (df['Price Per Unit'] > 0)
     ].copy()
+
+    # Build spec map
     spec: Dict[str, Tuple[int, int]] = {}
     for itype, grp in base.groupby('Instance Type'):
         first = grp.iloc[0]
         mem_gib = int(float(str(first['Memory']).split()[0]))
         spec[itype] = (int(first['Vcpu']), mem_gib)
-    od = base[(base['Term Type'] == 'OnDemand') & base['Price Description'].str.contains('per On Demand', case=False, na=False)]
-    od = od.groupby('Instance Type')['Price Per Unit'].min().to_dict()
-    ri = base[(base['Term Type'] == 'Reserved') &
-              base['Lease Contract Length'].str.startswith('3') &
-              (base['Purchase Option'] == 'No Upfront') &
-              (~base['Price Description'].str.contains('Upfront Fee', case=False, na=False))]
-    ri = ri.groupby('Instance Type')['Price Per Unit'].min().to_dict()
+
+    # OnDemand pricing
+    od_rows = base[
+        (base['Term Type'] == 'OnDemand') &
+        base['Price Description'].str.contains('per On Demand', case=False, na=False)
+    ]
+    od = od_rows.groupby('Instance Type')['Price Per Unit'].min().to_dict()
+
+    # Reserved 3yr No Upfront
+    ri_rows = base[
+        (base['Term Type'] == 'Reserved') &
+        (base['Lease Contract Length'].str.startswith('3')) &
+        (base['Purchase Option'] == 'No Upfront') &
+        (~base['Price Description'].str.contains('Upfront Fee', case=False, na=False))
+    ]
+    ri = ri_rows.groupby('Instance Type')['Price Per Unit'].min().to_dict()
+
+    # gp3 storage $/hr/GB
     _norm_cols(df)
     gp3_row = df[
         (df['Product Family'].str.lower() == 'storage') &
@@ -81,6 +94,7 @@ def _extract_pricing(df: pd.DataFrame):
         (df['Price Per Unit'] > 0)
     ]
     gp3_hr = pd.to_numeric(gp3_row['Price Per Unit']).min() / HOURS_IN_MONTH
+
     return od, ri, spec, gp3_hr
 
 # --- Instance chooser ---
@@ -100,19 +114,21 @@ def build_report(conn, project_id: Optional[str], csv_path: Path) -> pd.DataFram
     ]
     rows: List[Dict[str, object]] = []
     seen_vol: Dict[str, int] = {}
-    flavors = {f.id: f for f in conn.compute.flavors()}
-    flavors.update({f.name: f for f in flavors.values()})
+
     for srv in conn.compute.servers(details=True, all_projects=True):
         if project_id and srv.project_id != project_id:
             continue
         f_ref = srv.flavor.get('id') or srv.flavor.get('original_name')
-        flav = flavors.get(f_ref) or conn.compute.find_flavor(f_ref, ignore_missing=True)
+        flav = conn.compute.find_flavor(f_ref) or None
         if not flav:
             continue
         disk = flav.disk
         for att in conn.compute.volume_attachments(server=srv):
             if att.id not in seen_vol:
-                seen_vol[att.id] = conn.block_storage.get_volume(att.id).size
+                try:
+                    seen_vol[att.id] = conn.block_storage.get_volume(att.id).size
+                except Exception:
+                    seen_vol[att.id] = 0
             disk += seen_vol[att.id]
         itype, od_hr = _pick_shape(flav.vcpus, flav.ram, od, spec)
         ri_hr = ri.get(itype, 0)
@@ -145,14 +161,7 @@ BASE_CSS = '''
 <style>
   body { background-color: #f8f9fa; }
   .card { margin-top: 20px; }
-  #loading {
-    display: none;
-    position: fixed;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    background: rgba(255,255,255,0.8);
-    z-index: 1050;
-  }
+  #loading { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.8); z-index:1050; }
 </style>
 '''
 
@@ -168,12 +177,12 @@ FORM_HTML = '''<!doctype html>
 <body>
   <div id="loading">
     <div class="d-flex align-items-center justify-content-center h-100">
-      <img src="{{ url_for('static', filename='loading.gif') }}" alt="Loading..." />
+      <img src="https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExMmpwdDBzNzN6djV3cWM3NGtzMzE1ZGxjeDRuZWp2YWZpdHdsZmt5ZiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/cGQihe7X3yehxr4BsX/giphy.gif" alt="Loading..." />
     </div>
   </div>
   <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
     <div class="container-fluid">
-      <a class="navbar-brand" href="#">Pricing Tool</a>
+      <a class="navbar-brand" href="/">Pricing Tool</a>
     </div>
   </nav>
   <div class="container">
@@ -215,7 +224,7 @@ RESULT_HTML = '''<!doctype html>
 <body>
   <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
     <div class="container-fluid">
-      <a class="navbar-brand" href="#">Pricing Tool</a>
+      <a class="navbar-brand" href="/">Pricing Tool</a>
     </div>
   </nav>
   <div class="container">
@@ -240,17 +249,14 @@ RESULT_HTML = '''<!doctype html>
 def index():
     if request.method == 'POST':
         cloud = request.form.get('cloud', DEFAULT_CLOUD)
-        all_projects = True if request.form.get('all_projects') else False
+        all_projects = bool(request.form.get('all_projects'))
         raw_proj = request.form.get('project', '').strip()
         conn = connection.from_config(cloud=cloud)
-        if all_projects:
-            project_id = None
+        if not all_projects and raw_proj:
+            pr = conn.identity.find_project(raw_proj, ignore_missing=True)
+            project_id = pr.id if pr else raw_proj
         else:
-            if raw_proj:
-                pr = conn.identity.find_project(raw_proj, ignore_missing=True)
-                project_id = pr.id if pr else raw_proj
-            else:
-                project_id = None
+            project_id = None
         df = build_report(conn, project_id, CSV_PATH)
         return render_template_string(RESULT_HTML, default_cloud=DEFAULT_CLOUD, df=df)
     return render_template_string(FORM_HTML, default_cloud=DEFAULT_CLOUD)

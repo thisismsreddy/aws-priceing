@@ -1,4 +1,57 @@
- *
+Thought for a couple of seconds
+
+
+Gunicorn’s `app4:app` means:
+
+* **Module** `app4` → the file `app4.py` (in your `WorkingDirectory`)
+* **Attribute** `app` → the Flask object inside that file, e.g.
+
+  ```python
+  app = Flask(__name__)
+  ```
+
+So you need your main script saved as:
+
+```text
+/home/srini/aws-priceing/app4.py
+```
+
+and inside it:
+
+```python
+# app4.py
+from flask import Flask
+app = Flask(__name__)
+# … rest of your routes, etc.
+```
+
+If your file is named something else—say `pricing_tool.py`—just change the Gunicorn line to:
+
+```ini
+ExecStart=/home/srini/aws-priceing/venv/bin/gunicorn \
+    --workers 3 \
+    --bind unix:/run/pricing.sock \
+    pricing_tool:app
+```
+
+In short, match the `<module>:<variable>` to your filename (minus the `.py`) and your Flask variable name.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+*
 
 Serving Flask app 'app4'
  * Debug mode: on

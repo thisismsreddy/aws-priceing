@@ -1,3 +1,47 @@
+(env) [root@aws-billing-cal-tool system]# cat pricing.service
+[Unit]
+Description=AWS Pricing Comparison Flask App
+After=network.target
+
+[Service]
+User=srini
+Group=nginx
+WorkingDirectory=/root/my-app
+Environment="PATH=/root/env/bin"
+ExecStart=/root/env/bin/gunicorn \
+    --workers 3 \
+    --bind unix:/run/pricing.sock \
+    app:app
+
+[Install]
+WantedBy=multi-user.target
+(env) [root@aws-billing-cal-tool system]# cd
+(env) [root@aws-billing-cal-tool ~]# systemctl status pricing
+● pricing.service - AWS Pricing Comparison Flask App
+   Loaded: loaded (/etc/systemd/system/pricing.service; enabled; vendor preset: disabled)
+   Active: failed (Result: exit-code) since Mon 2025-05-05 23:34:43 EDT; 6min ago
+  Process: 9130 ExecStart=/root/env/bin/gunicorn --workers 3 --bind unix:/run/pricing.sock app:app (code=exited, status=217/USER)
+ Main PID: 9130 (code=exited, status=217/USER)
+
+May 05 23:34:43 aws-billing-cal-tool systemd[1]: Started AWS Pricing Comparison Flask App.
+May 05 23:34:43 aws-billing-cal-tool systemd[1]: pricing.service: Main process exited, code=exited, status=217/USER
+May 05 23:34:43 aws-billing-cal-tool systemd[1]: pricing.service: Failed with result 'exit-code'.
+
+
+(env) [root@aws-billing-cal-tool ~]# ls
+env  my-app
+(env) [root@aws-billing-cal-tool ~]# cd env/bin/
+(env) [root@aws-billing-cal-tool bin]# ls
+Activate.ps1  activate.csh   flask     jsondiff     normalizer           pbr   pip3.11  python3.11
+__pycache__   activate.fish  gunicorn  jsonpatch    numpy-config         pip   python
+activate      f2py           jp.py     jsonpointer  openstack-inventory  pip3  python3
+(env) [root@aws-billing-cal-tool bin]# cd
+(env) [root@aws-billing-cal-tool ~]# cd my-app/
+(env) [root@aws-billing-cal-tool my-app]# ls
+AmazonEC2-pricing-20250505.csv  __pycache__  app.py  static
+(env) [root@aws-billing-cal-tool my-app]#
+
+
 Thought for a couple of seconds
 
 

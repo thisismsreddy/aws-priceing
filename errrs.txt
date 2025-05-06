@@ -1,37 +1,4 @@
-Traceback (most recent call last):
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1498, in __call__
-    return self.wsgi_app(environ, start_response)
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1476, in wsgi_app
-    response = self.handle_exception(e)
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1473, in wsgi_app
-    response = self.full_dispatch_request()
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 882, in full_dispatch_request
-    rv = self.handle_user_exception(e)
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 880, in full_dispatch_request
-    rv = self.dispatch_request()
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 865, in dispatch_request
-    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
-  File "/home/srini/aws-priceing/app2.py", line 255, in index
-    df = build_report(conn, project_id, CSV_PATH)
-  File "/home/srini/aws-priceing/app2.py", line 116, in build_report
-    seen_vol[att.id] = conn.block_storage.get_volume(att.id).size
-  File "/home/srini/env/lib/python3.8/site-packages/openstack/block_storage/v3/_proxy.py", line 504, in get_volume
-    return self._get(_volume.Volume, volume)
-  File "/home/srini/env/lib/python3.8/site-packages/openstack/proxy.py", line 64, in check
-    return method(self, expected, actual, *args, **kwargs)
-  File "/home/srini/env/lib/python3.8/site-packages/openstack/proxy.py", line 649, in _get
-    return res.fetch(
-  File "/home/srini/env/lib/python3.8/site-packages/openstack/resource.py", line 1650, in fetch
-    self._translate_response(response, **kwargs)
-  File "/home/srini/env/lib/python3.8/site-packages/openstack/resource.py", line 1253, in _translate_response
-    exceptions.raise_from_response(response, error_message=error_message)
-  File "/home/srini/env/lib/python3.8/site-packages/openstack/exceptions.py", line 240, in raise_from_response
-    raise cls(
-openstack.exceptions.ResourceNotFound: No Volume found for 6fa98263-03e5-43d9-a1b2-7a5807c6445b: Client Error for url: https://openstack.ospcdl1.cloud1.oneadp.com:13776/v3/e474e657ddf3488a895c8b1c34136535/volumes/6fa98263-03e5-43d9-a1b2-7a5807c6445b, Volume 6fa98263-03e5-43d9-a1b2-7a5807c6445b could not be found.
-
-
-(env) ➜  aws-priceing git:(main) ✗ python app1.py
- * Serving Flask app 'app1'
+ * Serving Flask app 'app4'
  * Debug mode: on
 WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
  * Running on http://127.0.0.1:5000
@@ -39,26 +6,7 @@ Press CTRL+C to quit
  * Restarting with stat
  * Debugger is active!
  * Debugger PIN: 113-789-396
-127.0.0.1 - - [05/May/2025 17:26:30] "GET / HTTP/1.1" 200 -
-/home/srini/aws-priceing/app1.py:71: UserWarning: Boolean Series key will be reindexed to match DataFrame index.
-  ri_rows = base[(base['Term Type'] == 'Reserved') &
-127.0.0.1 - - [05/May/2025 17:26:56] "POST / HTTP/1.1" 200 -
-
-
-
-
-
-(env) ➜  aws-priceing git:(main) ✗ python app1.py
- * Serving Flask app 'app1'
- * Debug mode: on
-WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
- * Running on http://127.0.0.1:5000
-Press CTRL+C to quit
- * Restarting with stat
- * Debugger is active!
- * Debugger PIN: 113-789-396
-127.0.0.1 - - [05/May/2025 17:23:30] "GET / HTTP/1.1" 200 -
-127.0.0.1 - - [05/May/2025 17:23:46] "POST / HTTP/1.1" 500 -
+127.0.0.1 - - [05/May/2025 22:12:54] "GET / HTTP/1.1" 500 -
 Traceback (most recent call last):
   File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1498, in __call__
     return self.wsgi_app(environ, start_response)
@@ -72,177 +20,8 @@ Traceback (most recent call last):
     rv = self.dispatch_request()
   File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 865, in dispatch_request
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
-  File "/home/srini/aws-priceing/app1.py", line 208, in index
-    df = build_report(conn, proj, CSV_PATH)
-  File "/home/srini/aws-priceing/app1.py", line 150, in build_report
-    return pd.concat([df, pd.DataFrame([total])], ignore_index=True)([df, pd.DataFrame([total])], ignore_index=True)
-TypeError: 'DataFrame' object is not callable
-127.0.0.1 - - [05/May/2025 17:23:46] "GET /?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1" 304 -
-127.0.0.1 - - [05/May/2025 17:23:46] "GET /?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1" 304 -
-127.0.0.1 - - [05/May/2025 17:23:46] "GET /?__debugger__=yes&cmd=resource&f=console.png&s=EKkJAyS6oEy8k4OQ7Zmi HTTP/1.1" 200 -
-127.0.0.1 - - [05/May/2025 17:23:46] "GET /?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 304 -
-
-
-
-
-
-
-
-127.0.0.1 - - [05/May/2025 16:59:27] "GET /?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1" 304 -
-127.0.0.1 - - [05/May/2025 16:59:27] "GET /?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1" 304 -
-127.0.0.1 - - [05/May/2025 16:59:27] "GET /?__debugger__=yes&cmd=resource&f=console.png&s=zs1mr6lWLu9h8rfF6A5W HTTP/1.1" 200 -
-Processing VMs: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 418/418 [00:00<00:00, 500205.16it/s]
-127.0.0.1 - - [05/May/2025 16:59:55] "POST / HTTP/1.1" 500 -
-Traceback (most recent call last):
-  File "/home/srini/env/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 3802, in get_loc
-    return self._engine.get_loc(casted_key)
-  File "pandas/_libs/index.pyx", line 138, in pandas._libs.index.IndexEngine.get_loc
-  File "pandas/_libs/index.pyx", line 165, in pandas._libs.index.IndexEngine.get_loc
-  File "pandas/_libs/hashtable_class_helper.pxi", line 5745, in pandas._libs.hashtable.PyObjectHashTable.get_item
-  File "pandas/_libs/hashtable_class_helper.pxi", line 5753, in pandas._libs.hashtable.PyObjectHashTable.get_item
-KeyError: 'OnDemand_Hourly'
-
-The above exception was the direct cause of the following exception:
-
-Traceback (most recent call last):
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1498, in __call__
-    return self.wsgi_app(environ, start_response)
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1476, in wsgi_app
-    response = self.handle_exception(e)
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1473, in wsgi_app
-    response = self.full_dispatch_request()
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 882, in full_dispatch_request
-    rv = self.handle_user_exception(e)
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 880, in full_dispatch_request
-    rv = self.dispatch_request()
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 865, in dispatch_request
-    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
-  File "/home/srini/aws-priceing/app1.py", line 194, in index
-    df = build_report(conn, proj, CSV_PATH)
-  File "/home/srini/aws-priceing/app1.py", line 133, in build_report
-    df[c.replace('Hourly','Monthly')] = df[c] * HOURS_IN_MONTH
-  File "/home/srini/env/lib/python3.8/site-packages/pandas/core/frame.py", line 3807, in __getitem__
-    indexer = self.columns.get_loc(key)
-  File "/home/srini/env/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 3804, in get_loc
-    raise KeyError(key) from err
-KeyError: 'OnDemand_Hourly'
-127.0.0.1 - - [05/May/2025 16:59:55] "GET /?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1" 304 -
-127.0.0.1 - - [05/May/2025 16:59:55] "GET /?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1" 304 -
-127.0.0.1 - - [05/May/2025 16:59:55] "GET /?__debugger__=yes&cmd=resource&f=console.png&s=zs1mr6lWLu9h8rfF6A5W HTTP/1.1" 304 -
-
-
-
-
-jinja2.exceptions.TemplateSyntaxError: expected token 'end of print statement', got ':'
-2025-05-05 14:37:13,117 - INFO - 127.0.0.1 - - [05/May/2025 14:37:13] "GET / HTTP/1.1" 500 -
-2025-05-05 14:37:13,167 - INFO - 127.0.0.1 - - [05/May/2025 14:37:13] "GET /favicon.ico HTTP/1.1" 204 -
-2025-05-05 14:37:13,335 - ERROR - Exception on / [GET]
-Traceback (most recent call last):
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1473, in wsgi_app
-    response = self.full_dispatch_request()
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 882, in full_dispatch_request
-    rv = self.handle_user_exception(e)
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 880, in full_dispatch_request
-    rv = self.dispatch_request()
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 865, in dispatch_request
-    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
-  File "app-google.py", line 1221, in index
-    return render_template_string(HTML_TEMPLATE)
-  File "/home/srini/env/lib/python3.8/site-packages/flask/templating.py", line 161, in render_template_string
-    template = app.jinja_env.from_string(source)
-  File "/home/srini/env/lib/python3.8/site-packages/jinja2/environment.py", line 1105, in from_string
-    return cls.from_code(self, self.compile(source), gs, None)
-  File "/home/srini/env/lib/python3.8/site-packages/jinja2/environment.py", line 768, in compile
-    self.handle_exception(source=source_hint)
-  File "/home/srini/env/lib/python3.8/site-packages/jinja2/environment.py", line 936, in handle_exception
-    raise rewrite_traceback_stack(source=source)
-  File "<unknown>", line 16, in template
-jinja2.exceptions.TemplateSyntaxError: expected token 'end of print statement', got ':'
-2025-05-05 14:37:13,337 - INFO - 127.0.0.1 - - [05/May/2025 14:37:13] "GET / HTTP/1.1" 500 -
-2025-05-05 14:37:13,420 - INFO - 127.0.0.1 - - [05/May/2025 14:37:13] "GET /favicon.ico HTTP/1.1" 204 -
-
-
-
-
-2025-05-05 14:31:37,151 - INFO - WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
- * Running on all addresses (0.0.0.0)
- * Running on http://127.0.0.1:5001
- * Running on http://10.120.122.140:5001
-2025-05-05 14:31:37,152 - INFO - Press CTRL+C to quit
-2025-05-05 14:31:41,138 - ERROR - Exception on / [GET]
-Traceback (most recent call last):
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1473, in wsgi_app
-    response = self.full_dispatch_request()
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 882, in full_dispatch_request
-    rv = self.handle_user_exception(e)
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 880, in full_dispatch_request
-    rv = self.dispatch_request()
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 865, in dispatch_request
-    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
-  File "app-google.py", line 1057, in index
-    return render_template_string(HTML_TEMPLATE)
-  File "/home/srini/env/lib/python3.8/site-packages/flask/templating.py", line 161, in render_template_string
-    template = app.jinja_env.from_string(source)
-  File "/home/srini/env/lib/python3.8/site-packages/jinja2/environment.py", line 1105, in from_string
-    return cls.from_code(self, self.compile(source), gs, None)
-  File "/home/srini/env/lib/python3.8/site-packages/jinja2/environment.py", line 768, in compile
-    self.handle_exception(source=source_hint)
-  File "/home/srini/env/lib/python3.8/site-packages/jinja2/environment.py", line 936, in handle_exception
-    raise rewrite_traceback_stack(source=source)
-  File "<unknown>", line 16, in template
-jinja2.exceptions.TemplateSyntaxError: expected token 'end of print statement', got ':'
-
-
-(env) ➜  ~ python aws-priceing/openstack_aws_pricing_tool.py --cloud dc1-cdl-osp4 --project osp-c1npgt04-Infr-Arch --aws-csv aws-priceing/AmazonEC2-pricing-20250505.csv
-VMs: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 418/418 [00:02<00:00, 146.26vm/s]
-|    | Project                          | Server                           | vCPU   | RAM_GiB   | Disk_GB   | AWS_Type    |   OnDemand_Hourly |   RI3yr_Hourly |   OnDemand_Monthly |   OnDemand_Yearly |   RI3yr_Monthly |   RI3yr_Yearly |
-|----|----------------------------------|----------------------------------|--------|-----------|-----------|-------------|-------------------|----------------|--------------------|-------------------|-----------------|----------------|
-|  0 | ae0c4b74bf2e495690dea21b2c7de16a | linuxtest                        | 2      | 2         | 140       | t4g.small   |            0.0321 |         0.0226 |            23.4640 |          281.5680 |         16.5290 |       198.3480 |
-|  1 | ae0c4b74bf2e495690dea21b2c7de16a | CDLDTIACVDM0006                  | 8      | 16        | 365       | t4g.2xlarge |            0.3088 |         0.1561 |           225.4240 |         2705.0880 |        113.9530 |      1367.4360 |
-|  2 | ae0c4b74bf2e495690dea21b2c7de16a | CDLDTIACVDM0007                  | 8      | 16        | 271       | t4g.2xlarge |            0.2985 |         0.1458 |           217.9040 |         2614.8480 |        106.4330 |      1277.1960 |
-|  3 | ae0c4b74bf2e495690dea21b2c7de16a | DC1CDL4-operatiosn-t_cloud_agent | 2      | 4         | 50        | t4g.medium  |            0.0391 |         0.0200 |            28.5280 |          342.3360 |         14.5850 |       175.0200 |
-|  4 | ae0c4b74bf2e495690dea21b2c7de16a | CDLDTXASVPF0004                  | 4      | 8         | 205       | t4g.xlarge  |            0.1569 |         0.0805 |           114.5120 |         1374.1440 |         58.7400 |       704.8800 |
-|  5 | ae0c4b74bf2e495690dea21b2c7de16a | DC1CDL-infra-arch-AZ_cloud_agent | 2      | 4         | 50        | t4g.medium  |            0.0391 |         0.0200 |            28.5280 |          342.3360 |         14.5850 |       175.0200 |
-|  6 | ae0c4b74bf2e495690dea21b2c7de16a | CDLVDIVRO1514                    | 4      | 8         | 250       | t4g.xlarge  |            0.1618 |         0.0854 |           118.1120 |         1417.3440 |         62.3400 |       748.0800 |
-|  7 | ae0c4b74bf2e495690dea21b2c7de16a | kishan-windows                   | 4      | 16        | 500       | t4g.xlarge  |            0.1892 |         0.1128 |           138.1120 |         1657.3440 |         82.3400 |       988.0800 |
-|  8 | ae0c4b74bf2e495690dea21b2c7de16a | CDLVDIVROWA0359                  | 4      | 8         | 250       | t4g.xlarge  |            0.1618 |         0.0854 |           118.1120 |         1417.3440 |         62.3400 |       748.0800 |
-|  9 | ae0c4b74bf2e495690dea21b2c7de16a | infra-dc1cdl4-AZ2_cloud_agent    | 2      | 4         | 50        | t4g.medium  |            0.0391 |         0.0200 |            28.5280 |          342.3360 |         14.5850 |       175.0200 |
-| 10 | ae0c4b74bf2e495690dea21b2c7de16a | CDLVDIVROWA0665                  | 8      | 16        | 350       | t4g.2xlarge |            0.3072 |         0.1545 |           224.2240 |         2690.6880 |        112.7530 |      1353.0360 |
-| 11 | ae0c4b74bf2e495690dea21b2c7de16a | infra-dc1cdl4_cloud_agent        | 2      | 4         | 50        | t4g.medium  |            0.0391 |         0.0200 |            28.5280 |          342.3360 |         14.5850 |       175.0200 |
-| 12 |                                  | TOTAL                            |        |           |           |             |            1.7726 |         0.9230 |          1293.9760 |        15527.7120 |        673.7680 |      8085.2160 |
-
-
-
-
-(env) ➜  aws-priceing git:(main) ✗ pythoh app.py
-zsh: command not found: pythoh
-(env) ➜  aws-priceing git:(main) ✗ python app.py
- * Serving Flask app 'app'
- * Debug mode: on
-WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
- * Running on all addresses (0.0.0.0)
- * Running on http://127.0.0.1:8080
- * Running on http://10.120.122.140:8080
-Press CTRL+C to quit
- * Restarting with stat
- * Debugger is active!
- * Debugger PIN: 113-789-396
-10.120.122.140 - - [05/May/2025 13:52:28] "GET / HTTP/1.1" 500 -
-Traceback (most recent call last):
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1498, in __call__
-    return self.wsgi_app(environ, start_response)
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1476, in wsgi_app
-    response = self.handle_exception(e)
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1473, in wsgi_app
-    response = self.full_dispatch_request()
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 882, in full_dispatch_request
-    rv = self.handle_user_exception(e)
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 880, in full_dispatch_request
-    rv = self.dispatch_request()
-  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 865, in dispatch_request
-    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
-  File "/home/srini/aws-priceing/app.py", line 129, in home
-    return render_template_string(FORM_PAGE, css=CSS, js=SORT_JS, template_folder='.', globals={'base':BASE_PAGE})
+  File "/home/srini/aws-priceing/app4.py", line 364, in index
+    return render_template_string(FORM_HTML,
   File "/home/srini/env/lib/python3.8/site-packages/flask/templating.py", line 162, in render_template_string
     return _render(app, template, context)
   File "/home/srini/env/lib/python3.8/site-packages/flask/templating.py", line 131, in _render
@@ -251,9 +30,5 @@ Traceback (most recent call last):
     self.environment.handle_exception()
   File "/home/srini/env/lib/python3.8/site-packages/jinja2/environment.py", line 936, in handle_exception
     raise rewrite_traceback_stack(source=source)
-  File "<template>", line 2, in top-level template code
-  File "/home/srini/env/lib/python3.8/site-packages/flask/templating.py", line 65, in get_source
-    return self._get_source_fast(environment, template)
-  File "/home/srini/env/lib/python3.8/site-packages/flask/templating.py", line 99, in _get_source_fast
-    raise TemplateNotFound(template)
-jinja2.exceptions.TemplateNotFound: base
+  File "<template>", line 17, in top-level template code
+TypeError: url_for() takes 2 positional arguments but 3 were given

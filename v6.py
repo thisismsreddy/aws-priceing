@@ -1,12 +1,3 @@
-**Creating full script**
-
-The user wants the full script incorporating improvements they provided. The plan includes adding error handling for both unknown cloud names and project names. I'll modify the `index()` to define `error=None` and make sure the `render_template_string` passes the error parameter when rendering the form. First, I’ll ensure proper indentation and include imports, constants, helper functions, and Flask app setups. I’ll also use `error` with the form template now that it's included in the HTML block.
-
-
-Thought for 7 seconds
-
-
-```python
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -296,4 +287,3 @@ def index():
 
 if __name__ == '__main__':
     app.run(debug=True)
-```

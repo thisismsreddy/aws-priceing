@@ -74,7 +74,7 @@ def _extract_pricing(df: pd.DataFrame):
     ]
     od = od_rows.groupby('Instance Type')['Price Per Unit'].min().to_dict()
 
-    # Reserved 3yr No Upfront
+    # Reserved 3yr No Upfront (unused for on-demand)
     ri_rows = base[
         (base['Term Type'] == 'Reserved') &
         (base['Lease Contract Length'].str.startswith('3')) &
@@ -233,6 +233,8 @@ RESULT_HTML = '''<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Results</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- DataTables CSS -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css">
   ''' + BASE_CSS + '''
 </head>
 <body>
@@ -261,7 +263,8 @@ RESULT_HTML = '''<!doctype html>
           <div class="alert alert-warning">No VMs found for the given project/cloud.</div>
         {% else %}
           <div class="table-responsive">
-            {{ df.to_html(classes='table table-hover table-striped table-sm align-middle',
+            {{ df.to_html(classes='table table-striped table-hover table-bordered table-sm',
+                          table_id='results',
                           index=False,
                           float_format='${:,.2f}'.format) | safe }}
           </div>
@@ -270,6 +273,23 @@ RESULT_HTML = '''<!doctype html>
       </div>
     </div>
   </div>
+
+  <!-- jQuery + DataTables JS -->
+  <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+  <script>
+    $(document).ready(function() {
+      $('#results').DataTable({
+        paging: true,
+        searching: true,
+        info: true,
+        order: [[0, 'asc']],
+        lengthChange: false,
+        pageLength: 10
+      });
+    });
+  </script>
 </body>
 </html>'''
 

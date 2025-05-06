@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -16,7 +17,7 @@ from openstack import connection
 HOURS_IN_MONTH = 730
 HOURS_IN_YEAR = 8_760
 _SPACE_RE = re.compile(r"\s+")
-CSV_PATH = Path('/path/to/aws_price_list.csv')  # <-- set your CSV path here
+CSV_PATH = Path('/home/srini/aws-priceing/AmazonEC2-pricing-20250505.csv')  # <-- set your CSV path here
 DEFAULT_CLOUD = 'openstack'  # default cloud name from clouds.yaml
 
 # --- CSV helpers ---
@@ -165,6 +166,7 @@ BASE_CSS = '''
 </style>
 '''
 
+
 FORM_HTML = '''<!doctype html>
 <html lang="en">
 <head>
@@ -177,12 +179,12 @@ FORM_HTML = '''<!doctype html>
 <body>
   <div id="loading">
     <div class="d-flex align-items-center justify-content-center h-100">
-      <img src="https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExMmpwdDBzNzN6djV3cWM3NGtzMzE1ZGxjeDRuZWp2YWZpdHdsZmt5ZiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/cGQihe7X3yehxr4BsX/giphy.gif" alt="Loading..." />
+      <img src="{{ url_for('static', filename='loading.gif') }}" alt="Loading..." />
     </div>
   </div>
   <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
     <div class="container-fluid">
-      <a class="navbar-brand" href="/">Pricing Tool</a>
+      <a class="navbar-brand" href="#">Pricing Tool</a>
     </div>
   </nav>
   <div class="container">

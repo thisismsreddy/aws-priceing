@@ -1,3 +1,44 @@
+```
+# /etc/nginx/conf.d/pricing.conf
+server {
+    listen       80;
+    server_name  aws-billing-cal-tool.example.com;   # ← your FQDN or IP
+
+    # Static assets
+    root /root/my-app/static;
+    location /static/ {
+        alias /root/my-app/static/;
+        access_log off;
+        expires 30d;
+    }
+
+    # Proxy everything else (including /download) to Gunicorn via UNIX socket
+    location / {
+        include        proxy_params;
+        proxy_pass     http://unix:/run/pricing.sock;
+    }
+
+    # Logging
+    access_log  /var/log/nginx/pricing_access.log  main;
+    error_log   /var/log/nginx/pricing_error.log warn;
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 (env) [root@aws-billing-cal-tool system]# cat pricing.service
 [Unit]
 Description=AWS Pricing Comparison Flask App

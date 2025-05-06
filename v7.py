@@ -74,7 +74,7 @@ def _extract_pricing(df: pd.DataFrame):
     ]
     od = od_rows.groupby('Instance Type')['Price Per Unit'].min().to_dict()
 
-    # Reserved 3yr No Upfront (unused for on-demand)
+    # Reserved 3yr No Upfront
     ri_rows = base[
         (base['Term Type'] == 'Reserved') &
         (base['Lease Contract Length'].str.startswith('3')) &
@@ -134,6 +134,7 @@ def build_report(conn, project_id: Optional[str], csv_path: Path) -> pd.DataFram
                     seen_vol[att.id] = 0
             disk += seen_vol[att.id]
         itype, od_hr = _pick_shape(flav.vcpus, flav.ram, od, spec)
+        ri_hr = ri.get(itype, 0)
         storage_hr = disk * gp3
         rows.append({
             'Project': srv.project_id,
@@ -143,10 +144,17 @@ def build_report(conn, project_id: Optional[str], csv_path: Path) -> pd.DataFram
             'Disk_GB': disk,
             'AWS_Type': itype or 'N/A',
             'OnDemand_Hourly': (od_hr or 0) + storage_hr,
+            'RI3yr_Hourly': ri_hr + storage_hr,
             'OnDemand_Monthly': ((od_hr or 0) + storage_hr) * HOURS_IN_MONTH,
+            'OnDemand_Yearly': ((od_hr or 0) + storage_hr) * HOURS_IN_YEAR,
+            'RI3yr_Monthly': (ri_hr + storage_hr) * HOURS_IN_MONTH,
+            'RI3yr_Yearly': (ri_hr + storage_hr) * HOURS_IN_YEAR,
         })
-
-    df = pd.DataFrame(rows)
+    df = pd.DataFrame(rows, columns=columns)
+    if not df.empty:
+        totals = {c: (df[c].sum() if df[c].dtype.kind in ('i','f') else '') for c in df.columns}
+        totals['Server'] = 'TOTAL'
+        df = pd.concat([df, pd.DataFrame([totals])], ignore_index=True)
     return df
 
 # --- Flask web app ---
@@ -294,11 +302,10 @@ def index():
         else:
             project_id = None
 
-        # build raw report
-        full_df = build_report(conn, project_id, CSV_PATH)
+        # full report
+        df = build_report(conn, project_id, CSV_PATH)
 
         # compute summary
-        df = full_df.copy()
         summary = {
             'servers': len(df),
             'vcpu': int(df['vCPU'].sum()),
@@ -306,9 +313,6 @@ def index():
             'disk': int(df['Disk_GB'].sum()),
             'monthly_cost': float(df['OnDemand_Monthly'].sum()),
         }
-
-        # only show selected columns
-        df = df[['Server', 'vCPU', 'RAM_GiB', 'Disk_GB', 'AWS_Type', 'OnDemand_Monthly']]
 
         return render_template_string(RESULT_HTML, df=df, summary=summary)
 

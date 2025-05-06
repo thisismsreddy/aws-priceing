@@ -1,3 +1,35 @@
+Traceback (most recent call last):
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1498, in __call__
+    return self.wsgi_app(environ, start_response)
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1476, in wsgi_app
+    response = self.handle_exception(e)
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 1473, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 882, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 880, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/home/srini/env/lib/python3.8/site-packages/flask/app.py", line 865, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "/home/srini/aws-priceing/app2.py", line 255, in index
+    df = build_report(conn, project_id, CSV_PATH)
+  File "/home/srini/aws-priceing/app2.py", line 116, in build_report
+    seen_vol[att.id] = conn.block_storage.get_volume(att.id).size
+  File "/home/srini/env/lib/python3.8/site-packages/openstack/block_storage/v3/_proxy.py", line 504, in get_volume
+    return self._get(_volume.Volume, volume)
+  File "/home/srini/env/lib/python3.8/site-packages/openstack/proxy.py", line 64, in check
+    return method(self, expected, actual, *args, **kwargs)
+  File "/home/srini/env/lib/python3.8/site-packages/openstack/proxy.py", line 649, in _get
+    return res.fetch(
+  File "/home/srini/env/lib/python3.8/site-packages/openstack/resource.py", line 1650, in fetch
+    self._translate_response(response, **kwargs)
+  File "/home/srini/env/lib/python3.8/site-packages/openstack/resource.py", line 1253, in _translate_response
+    exceptions.raise_from_response(response, error_message=error_message)
+  File "/home/srini/env/lib/python3.8/site-packages/openstack/exceptions.py", line 240, in raise_from_response
+    raise cls(
+openstack.exceptions.ResourceNotFound: No Volume found for 6fa98263-03e5-43d9-a1b2-7a5807c6445b: Client Error for url: https://openstack.ospcdl1.cloud1.oneadp.com:13776/v3/e474e657ddf3488a895c8b1c34136535/volumes/6fa98263-03e5-43d9-a1b2-7a5807c6445b, Volume 6fa98263-03e5-43d9-a1b2-7a5807c6445b could not be found.
+
+
 (env) ➜  aws-priceing git:(main) ✗ python app1.py
  * Serving Flask app 'app1'
  * Debug mode: on

@@ -1,4 +1,6 @@
- * Serving Flask app 'app4'
+ *
+
+Serving Flask app 'app4'
  * Debug mode: on
 WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
  * Running on http://127.0.0.1:5000
@@ -32,3 +34,6 @@ Traceback (most recent call last):
     raise rewrite_traceback_stack(source=source)
   File "<template>", line 17, in top-level template code
 TypeError: url_for() takes 2 positional arguments but 3 were given
+
+
+<img src="{{ url_for('static', filename='loading.gif') }}" alt="Loading..." />
